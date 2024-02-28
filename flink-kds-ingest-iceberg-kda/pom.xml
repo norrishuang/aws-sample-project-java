@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -8,27 +9,23 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>com.amazonaws.java</groupId>
-    <artifactId>flink-opensearch-kda</artifactId>
+    <groupId>com.amazonaws.java.flink</groupId>
+    <artifactId>flink-kds-ingest-iceberg-kda</artifactId>
     <packaging>jar</packaging>
 
     <properties>
         <target.java.version>11</target.java.version>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.source>${target.java.version}</maven.compiler.source>
+        <maven.compiler.target>${target.java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flink.version>1.15.2</flink.version>
         <flink.kds.connector.version>1.15.4</flink.kds.connector.version>
         <kda.runtime.version>1.2.0</kda.runtime.version>
+        <iceberg.version>1.4.2</iceberg.version>
+        <hadoop.version>3.2.1</hadoop.version>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-opensearch</artifactId>
-            <version>1.1.0-1.17</version>
-        </dependency>
-
         <!-- Kinesis Data Analytics -->
         <dependency>
             <groupId>com.amazonaws</groupId>
@@ -37,11 +34,11 @@
             <scope>provided</scope>
         </dependency>
 
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kafka</artifactId>
-            <version>${flink.version}</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.flink</groupId>-->
+<!--            <artifactId>flink-connector-kafka</artifactId>-->
+<!--            <version>${flink.version}</version>-->
+<!--        </dependency>-->
 
         <dependency>
             <groupId>org.apache.flink</groupId>
@@ -49,16 +46,7 @@
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-hadoop-fs</artifactId>
-            <version>${flink.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-s3-fs-hadoop</artifactId>
-            <version>${flink.version}</version>
-        </dependency>
+
 
         <dependency>
             <groupId>org.apache.flink</groupId>
@@ -80,6 +68,63 @@
             <artifactId>flink-connector-kinesis</artifactId>
             <version>${flink.version}</version>
         </dependency>
+
+
+        <!--Iceberg Dependencies -->
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-flink-runtime-1.15</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-aws-bundle</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+
+        <!-- hadoop dependency -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-client</artifactId>
+            <version>${hadoop.version}</version>
+<!--                    <scope>provided</scope>-->
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-aws</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.hadoop</groupId>-->
+<!--            <artifactId>hadoop-aws</artifactId>-->
+<!--            <version>${hadoop.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>org.apache.hadoop</groupId>-->
+<!--            <artifactId>hadoop-common</artifactId>-->
+<!--            <version>${hadoop.version}</version>-->
+<!--            <exclusions>-->
+<!--                <exclusion>-->
+<!--                    <groupId>com.google.protobuf</groupId>-->
+<!--                    <artifactId>protobuf-java</artifactId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <groupId>ch.qos.reload4j</groupId>-->
+<!--                    <artifactId>reload4j</artifactId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <groupId>org.slf4j</groupId>-->
+<!--                    <artifactId>slf4j-reload4j</artifactId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <groupId>org.apache.zookeeper</groupId>-->
+<!--                    <artifactId>zookeeper</artifactId>-->
+<!--                </exclusion>-->
+<!--            </exclusions>-->
+<!--        </dependency>-->
 
     </dependencies>
 
@@ -135,10 +180,20 @@
                             </filters>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.amazonaws.java.flink.KDAtoOpenSearch</mainClass>
+                                    <mainClass>com.amazonaws.java.flink.kda.IcebergApplication</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
+                            <relocations>
+                                <relocation>
+                                    <pattern>org.apache.hadoop.conf</pattern>
+                                    <shadedPattern>shaded.org.apache.hadoop.conf</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.flink.runtime.util.HadoopUtils</pattern>
+                                    <shadedPattern>shadow.org.apache.flink.runtime.util.HadoopUtils</shadedPattern>
+                                </relocation>
+                            </relocations>
 
                         </configuration>
                     </execution>
@@ -146,5 +201,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

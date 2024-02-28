@@ -4,12 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.example</groupId>
+    <groupId>com.amazonaws</groupId>
     <artifactId>aws-sample-project-java</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <modules>
         <module>flink-opensearch-kda</module>
+        <module>flink-kds-ingest-iceberg-kda</module>
+        <module>flink-kds-ingest-hudi-kda</module>
     </modules>
 
     <properties>
