@@ -94,7 +94,7 @@ public class IcebergApplication {
 ////
 
 
-			String warehousePath = "s3://emr-hive-us-east-1-812046859005/datalake/iceberg-folder";
+			String warehousePath = "s3a://emr-hive-us-east-1-812046859005/datalake/iceberg-folder";
 			//hive catalog
 //			final String icebergCatalog = String.format("CREATE CATALOG flink_catalog WITH (\n" +
 //					"   'type'='iceberg',\n" +
