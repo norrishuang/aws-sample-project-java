@@ -169,7 +169,8 @@ public class HudiApplication {
 					"  `transactionAmount` BIGINT,\n" +
 					"  `sourceIp` STRING,\n" +
 					"  `status` STRING,\n" +
-					"  `transactionTime` STRING\n" +
+					"  `transactionTime` STRING,\n" +
+					"   PRIMARY KEY (customerId,transactionTime) NOT ENFORCED\n" +
 					"    ) \n" +
 					"    WITH (\n" +
 					"    'connector' = 'hudi',\n" +
