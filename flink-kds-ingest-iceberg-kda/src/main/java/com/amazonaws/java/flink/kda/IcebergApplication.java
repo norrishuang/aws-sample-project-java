@@ -35,24 +35,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-/**
- * Skeleton for a Hudi Flink Streaming Job.
- *
- * <p>For a tutorial how to write a Flink streaming application, check the
- * tutorials and examples on the <a href="https://flink.apache.org/docs/stable/">Flink Website</a>.
- *
- * <p>To package your application into a JAR file for execution, run
- * 'mvn clean package' on the command line.
- *
- * <p>If you change the name of the main class (with the public static void main(String[] args))
- * method, change the respective entry in the pom.xml file (simply search for 'mainClass').
- *
- * <p>Disclaimer: This code is not production ready.</p>
- */
+
 public class IcebergApplication {
 	private static final Logger LOG = LoggerFactory.getLogger(IcebergApplication.class);
 
 	private static final String DEFAULT_KINESIS_STREAM = "ev_station_data";
+
+	private static final String DEFAULT_WAREHOUSE = "thrift://localhost:9083";
 
 	private static ParameterTool loadApplicationParameters(String[] args, StreamExecutionEnvironment env) throws IOException {
 		if (env instanceof LocalStreamEnvironment) {
@@ -94,7 +83,9 @@ public class IcebergApplication {
 ////
 
 
-			String warehousePath = "s3a://emr-hive-us-east-1-812046859005/datalake/iceberg-folder";
+//			String warehousePath = "s3a://emr-hive-us-east-1-812046859005/datalake/iceberg-folder";
+			String warehousePath = applicationProperties.get("iceberg_warehouse", DEFAULT_WAREHOUSE);
+
 			//hive catalog
 //			final String icebergCatalog = String.format("CREATE CATALOG flink_catalog WITH (\n" +
 //					"   'type'='iceberg',\n" +

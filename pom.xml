@@ -12,6 +12,7 @@
         <module>flink-opensearch-kda</module>
         <module>flink-kds-ingest-iceberg-kda</module>
         <module>flink-kds-ingest-hudi-kda</module>
+        <module>flink-kafka-opensearch</module>
     </modules>
 
     <properties>

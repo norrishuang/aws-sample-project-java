@@ -178,7 +178,7 @@ public class HudiApplication {
 					"    'changelog.enabled'='true',\n" +
 					"    'write.task.max.size'='4096',\n" +
 					"    'write.bucket_assign.tasks'='1',\n" +
-					"    'hoodie.embed.timeline.server'='false',\n" +
+					"    'hoodie.embed.timeline.server'='true',\n" +
 					"    'write.merge.max_memory'='1024',\n" +
 					"    'write.tasks' = '1',\n" +
 					"    'hive_sync.enable' = 'true',\n" +

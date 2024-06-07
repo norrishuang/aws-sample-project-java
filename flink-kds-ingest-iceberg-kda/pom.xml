@@ -19,10 +19,12 @@
         <maven.compiler.target>${target.java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flink.version>1.15.2</flink.version>
-        <flink.kds.connector.version>1.15.4</flink.kds.connector.version>
+        <flink.kds.connector.version>1.15.2</flink.kds.connector.version>
         <kda.runtime.version>1.2.0</kda.runtime.version>
         <iceberg.version>1.4.2</iceberg.version>
-        <hadoop.version>3.2.1</hadoop.version>
+        <hadoop.version>3.3.2</hadoop.version>
+        <avro.version>1.10.2</avro.version>
+        <log4j.version>2.17.1</log4j.version>
     </properties>
 
     <dependencies>
@@ -34,61 +36,66 @@
             <scope>provided</scope>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>org.apache.flink</groupId>-->
-<!--            <artifactId>flink-connector-kafka</artifactId>-->
-<!--            <version>${flink.version}</version>-->
-<!--        </dependency>-->
-
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-runtime-web</artifactId>
             <version>${flink.version}</version>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
-
-
+        <!-- Flink Core dependencies -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-api-java-bridge</artifactId>
+            <artifactId>flink-streaming-java</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.flink/flink-table-planner -->
-        <!-- solve:Could not instantiate the executor. Make sure a planner module is on the classpath -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-table-planner_2.12</artifactId>
+            <artifactId>flink-clients</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- AVRO -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-avro</artifactId>
+            <version>${flink.version}</version>
         </dependency>
 
         <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-connector-kinesis</artifactId>
-            <version>${flink.version}</version>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
         </dependency>
-
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.15.2</version>
+        </dependency>
 
         <!--Iceberg Dependencies -->
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-flink-runtime-1.15</artifactId>
-            <version>${iceberg.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-flink</artifactId>
-            <version>${iceberg.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-flink-1.15</artifactId>
-            <version>${iceberg.version}</version>
-        </dependency>
-
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-core</artifactId>
@@ -97,60 +104,85 @@
 
         <dependency>
             <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-flink-1.15</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-flink-runtime-1.15</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-flink</artifactId>
+            <version>${iceberg.version}</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-aws-bundle</artifactId>
             <version>${iceberg.version}</version>
         </dependency>
 
-        <!-- hadoop dependency -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
             <version>${hadoop.version}</version>
-<!--                    <scope>provided</scope>-->
         </dependency>
 
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-hadoop-fs</artifactId>
+            <artifactId>flink-connector-files</artifactId>
             <version>${flink.version}</version>
         </dependency>
-
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-s3-fs-hadoop</artifactId>
+            <artifactId>flink-table-runtime</artifactId>
             <version>${flink.version}</version>
+            <scope>provided</scope>
         </dependency>
 
-<!--        <dependency>-->
-<!--            <groupId>org.apache.hadoop</groupId>-->
-<!--            <artifactId>hadoop-aws</artifactId>-->
-<!--            <version>${hadoop.version}</version>-->
-<!--        </dependency>-->
+        <!-- Amazon Managed Service for Apache Flink (formerly Amazon Kinesis Data Analytics) runtime-->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-kinesisanalytics-runtime</artifactId>
+            <version>${kda.runtime.version}</version>
+        </dependency>
+
+        <!-- Flink Kinesis connector -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-kinesis</artifactId>
+            <version>${flink.kds.connector.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-aws-kinesis-streams</artifactId>
+            <version>${flink.kds.connector.version}</version>
+        </dependency>
 
 
-<!--        <dependency>-->
-<!--            <groupId>org.apache.hadoop</groupId>-->
-<!--            <artifactId>hadoop-common</artifactId>-->
-<!--            <version>${hadoop.version}</version>-->
-<!--            <exclusions>-->
-<!--                <exclusion>-->
-<!--                    <groupId>com.google.protobuf</groupId>-->
-<!--                    <artifactId>protobuf-java</artifactId>-->
-<!--                </exclusion>-->
-<!--                <exclusion>-->
-<!--                    <groupId>ch.qos.reload4j</groupId>-->
-<!--                    <artifactId>reload4j</artifactId>-->
-<!--                </exclusion>-->
-<!--                <exclusion>-->
-<!--                    <groupId>org.slf4j</groupId>-->
-<!--                    <artifactId>slf4j-reload4j</artifactId>-->
-<!--                </exclusion>-->
-<!--                <exclusion>-->
-<!--                    <groupId>org.apache.zookeeper</groupId>-->
-<!--                    <artifactId>zookeeper</artifactId>-->
-<!--                </exclusion>-->
-<!--            </exclusions>-->
-<!--        </dependency>-->
+        <!-- Logging framework, to produce console output when running in the IDE. -->
+        <!-- These dependencies are excluded from the application JAR by default. -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
 
     </dependencies>
 
@@ -204,11 +236,12 @@
                                     </excludes>
                                 </filter>
                             </filters>
-                            <transformers>
+                            <transformers combine.children="append">
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.amazonaws.java.flink.kda.IcebergApplication</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+
                             </transformers>
                             <relocations>
                                 <relocation>
