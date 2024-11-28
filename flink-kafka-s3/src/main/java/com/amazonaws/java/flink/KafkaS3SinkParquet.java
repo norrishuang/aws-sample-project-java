@@ -62,7 +62,6 @@ public class KafkaS3SinkParquet {
         applicationProperties = applicationProperties.mergeWith(ParameterTool.fromSystemProperties());
 
 
-
         String kafka_bootstrap_servers = applicationProperties.get("kafka_bootstrap_servers");
         String s3Path = applicationProperties.get("s3.path");
         String gruopid = applicationProperties.get("group.id","flink-workshop-group-test-tb1");
@@ -100,22 +99,7 @@ public class KafkaS3SinkParquet {
 
         // Add source to Flink job
         DataStream<String> input = env.addSource(consumer);
-
-
-
-//        KafkaSource<String> source = KafkaSource.<String>builder()
-////                .setBootstrapServers(kafka_bootstrap_servers)
-//                .setTopics(kafka_topic)
-//                .setProperties(properties)
-//                .setDeserializer(new ValueOnlyDeserializationSchema<>(new SimpleStringSchema()))
-//                .build();
-
-//        KafkaSource<String> source =  createKafkaSource(properties, topics);
-
-//        DataStream<String> input = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka source");
-
         ObjectMapper jsonParser = new ObjectMapper();
-
 
         input.map(value -> { // Parse the JSON
             JsonNode jsonNode = jsonParser.readValue(value, JsonNode.class);
