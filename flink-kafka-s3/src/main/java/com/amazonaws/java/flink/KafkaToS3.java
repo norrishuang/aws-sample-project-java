@@ -29,11 +29,9 @@ public class KafkaToS3 {
       Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
       configuration.setString("execution.checkpointing.interval", "1 min");
 
-      //            String aos_host =
-      // "https://vpc-vector-db-demo-tzkscvrlfcdid4ykyrkanxgmri.us-east-1.es.amazonaws.com";
-
       String kafka_bootstrap_servers = applicationProperties.get("kafka_bootstrap_servers");
       String s3Path = applicationProperties.get("s3.path");
+      String gruopid = applicationProperties.get("group.id","flink-workshop-group-test-tb1");
 
       // ingest data from kafka to s3 with flinksql and used glue data catalog
       final String kafka_topic = applicationProperties.get("topic");
@@ -53,10 +51,10 @@ public class KafkaToS3 {
                   + "'topic' = '%s',\n"
                   + "'properties.bootstrap.servers' = '%s',\n"
                   + "'scan.startup.mode' = 'earliest-offset',\n"
-                  + "'properties.group.id' = 'flink-workshop-group-test-tb1',\n"
+                  + "'properties.group.id' = '%s',\n"
                   + "'format' = 'json'\n"
                   + ")",
-              kafka_topic, kafka_bootstrap_servers);
+              kafka_topic, kafka_bootstrap_servers, gruopid);
 
       streamTableEnvironment.executeSql(sourceKafka);
 
