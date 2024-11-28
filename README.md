@@ -20,5 +20,5 @@
 
 
 ## 提示
-1. Flink OpenSearch Connector 只支持到 OpenSearch 1.x 版本
+1. Flink OpenSearch Connector 只支持到 OpenSearch 1.x 版本(OpenSearch 需要是1.x的版本)
 2. 由于 KDA（MSF）未集成 Iceberg，因此需要通过重写类的方式支持，注意代码中的内容。
