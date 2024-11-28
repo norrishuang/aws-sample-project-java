@@ -24,7 +24,7 @@ public class KafkaToS3 {
     public static void createAndDeployJob(
         StreamExecutionEnvironment env, ParameterTool applicationProperties) {
       StreamTableEnvironment streamTableEnvironment =
-          StreamTableEnvironment.create(env, EnvironmentSettings.newInstance().inBatchMode().build());
+          StreamTableEnvironment.create(env, EnvironmentSettings.newInstance().build());
 
       Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
       configuration.setString("execution.checkpointing.interval", "1 min");
@@ -42,25 +42,19 @@ public class KafkaToS3 {
       final String sourceKafka =
           String.format(
               "CREATE TABLE kafka_source_table (\n"
-                      + "id INT,\n"
-                      + "uuid STRING,\n"
-                  + "user_name STRING,\n"
-                  + "phone_number BIGINT,\n"
-                  + "product_id INT,\n"
-                  + "product_name STRING, \n"
-                  + "product_type STRING, \n"
-                  + "manufacturing_date INT, \n"
-                  + "price FLOAT, \n"
-                  + "unit INT, \n"
-                  + "ts TIMESTAMP(3) \n"
+                      + "before STRING,\n"
+                      + "after STRING,\n"
+                  + "source STRING,\n"
+                  + "op STRING,\n"
+                  + "ts_ms BIGINT,\n"
+                  + "transaction STRING \n"
                   + ") with (\n"
                   + "'connector' = 'kafka',\n"
                   + "'topic' = '%s',\n"
                   + "'properties.bootstrap.servers' = '%s',\n"
                   + "'scan.startup.mode' = 'earliest-offset',\n"
                   + "'properties.group.id' = 'flink-workshop-group-test-tb1',\n"
-                  + "'debezium-json.timestamp-format.standard' = 'ISO-8601', \n"
-                  + "'format' = 'debezium-json'\n"
+                  + "'format' = 'json'\n"
                   + ")",
               kafka_topic, kafka_bootstrap_servers);
 
@@ -68,17 +62,12 @@ public class KafkaToS3 {
 
       // 创建 S3 Parquet 接收表
       streamTableEnvironment.executeSql("CREATE TABLE s3_sink ("
-              + "id INT,\n"
-                      + "uuid STRING,\n"
-                      + "user_name STRING,\n"
-                      + "phone_number BIGINT,\n"
-                      + "product_id INT,\n"
-                      + "product_name STRING, \n"
-                      + "product_type STRING, \n"
-                      + "manufacturing_date INT, \n"
-                      + "price FLOAT, \n"
-                      + "unit INT, \n"
-                      + "ts TIMESTAMP(3) \n" +
+                      + "before STRING,\n"
+                      + "after STRING,\n"
+                      + "source STRING,\n"
+                      + "op STRING,\n"
+                      + "ts_ms BIGINT,\n"
+                      + "transaction STRING \n" +
               ") WITH (" +
               "  'connector' = 'filesystem'," +
               "  'path' = '" +s3Path+ "'," +

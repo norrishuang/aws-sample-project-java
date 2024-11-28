@@ -9,8 +9,8 @@ S3_PATH=<s3-path>
 flink run-application -t yarn-application \
 -Dyarn.application.name=flink-kafka-s3 \
 -Dparallelism.default=2 \
--Djobmanager.memory.process.size=1024mb \
--Dtaskmanager.memory.process.size=1024mb \
+-Djobmanager.memory.process.size=2048mb \
+-Dtaskmanager.memory.process.size=2048mb \
 -Dtaskmanager.numberOfTaskSlots=1 \
 -Dclassloader.resolve-order=parent-first \
 flink-kafka-s3-1.0-SNAPSHOT.jar \
