@@ -65,11 +65,11 @@ public class KafkaS3SinkParquet {
         properties.setProperty("security.protocol", "SSL");
 
         // TLS/SSL configuration
-        properties.setProperty("ssl.truststore.location", "/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.412.b08-1.amzn2.0.1.x86_64/jre/lib/security/cacerts");
-//        properties.setProperty("ssl.truststore.password", System.getenv("TRUSTSTORE_PASSWORD"));
-//        properties.setProperty("ssl.keystore.location", "/path/to/client.keystore.jks");
-//        properties.setProperty("ssl.keystore.password", System.getenv("KEYSTORE_PASSWORD"));
-//        properties.setProperty("ssl.key.password", System.getenv("KEY_PASSWORD"));
+        properties.setProperty("ssl.truststore.location", "/tmp/kafka.client.truststore.jks");
+//        properties.setProperty("ssl.truststore.password", "amazon123");
+        properties.setProperty("ssl.keystore.location", "/tmp/kafka.client.keystore.jks");
+        properties.setProperty("ssl.keystore.password", "amazon123");
+        properties.setProperty("ssl.key.password", "amazon123");
 
         // Create Kafka Consumer
         FlinkKafkaConsumer<String> consumer = new FlinkKafkaConsumer<>(

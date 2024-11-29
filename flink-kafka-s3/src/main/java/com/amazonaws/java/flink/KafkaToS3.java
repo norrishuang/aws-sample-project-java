@@ -6,8 +6,6 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 
-import java.io.IOException;
-
 public class KafkaToS3 {
   public static void main(String[] args) throws Exception {
     // set up the streaming execution environment
