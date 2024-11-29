@@ -29,8 +29,9 @@ flink-kafka-s3-1.0-SNAPSHOT.jar \
 ``` 
 > There need to set parameter `-Dclassloader.resolve-order=parent-first` for resolve conflict of kafka.
 
-[KafkaS3SinkParquet.java](https://github.com/norrishuang/aws-sample-project-java/blob/main/flink-kafka-s3/src/main/java/com/amazonaws/java/flink/KafkaS3SinkParquet.java) 
+In [KafkaS3SinkParquet.java](https://github.com/norrishuang/aws-sample-project-java/blob/main/flink-kafka-s3/src/main/java/com/amazonaws/java/flink/KafkaS3SinkParquet.java), It implement connect MSK with mutual TLS.
+
+
 When enable the TLS, there is a default truststore, set
 `truststore.location=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.412.b08-1.amzn2.0.1.x86_64/jre/lib/security/cacerts`
 
-> For attention, you need set the main class in pom.xml. 

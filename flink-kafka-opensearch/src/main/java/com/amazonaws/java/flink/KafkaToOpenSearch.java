@@ -2,12 +2,9 @@ package com.amazonaws.java.flink;
 
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.environment.LocalStreamEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
-
-import java.io.IOException;
 
 public class KafkaToOpenSearch {
   public static void main(String[] args) throws Exception {
