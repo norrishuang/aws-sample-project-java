@@ -53,7 +53,6 @@ public class KafkaS3SinkParquet {
         String kafka_bootstrap_servers = applicationProperties.get("kafka_bootstrap_servers");
         String s3Path = applicationProperties.get("s3.path");
         String gruopid = applicationProperties.get("group.id","flink-workshop-group-test-tb1");
-
         // ingest data from kafka to s3 with flinksql and used glue data catalog
         final String kafka_topic = applicationProperties.get("topic");
 
@@ -65,11 +64,11 @@ public class KafkaS3SinkParquet {
         properties.setProperty("security.protocol", "SSL");
 
         // TLS/SSL configuration
-        properties.setProperty("ssl.truststore.location", "/tmp/kafka.client.truststore.jks");
+        properties.setProperty("ssl.truststore.location", applicationProperties.get("ssl.truststore.location","/tmp/kafka.client.truststore.jks"));
 //        properties.setProperty("ssl.truststore.password", "amazon123");
-        properties.setProperty("ssl.keystore.location", "/tmp/kafka.client.keystore.jks");
-        properties.setProperty("ssl.keystore.password", "amazon123");
-        properties.setProperty("ssl.key.password", "amazon123");
+        properties.setProperty("ssl.keystore.location", applicationProperties.get("ssl.keystore.location","/tmp/kafka.client.keystore.jks"));
+        properties.setProperty("ssl.keystore.password", applicationProperties.get("ssl.keystore.password","amazon123"));
+        properties.setProperty("ssl.key.password", applicationProperties.get("ssl.key.password","amazon123"));
 
         // Create Kafka Consumer
         FlinkKafkaConsumer<String> consumer = new FlinkKafkaConsumer<>(

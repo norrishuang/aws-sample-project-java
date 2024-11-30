@@ -26,6 +26,11 @@ flink-kafka-s3-1.0-SNAPSHOT.jar \
 --kafka_bootstrap_servers $KAFKA_BOOTSTRAP_SERVER \
 --topic $TOPIC_NAME \
 --s3.path $S3_PATH
+--group.id <consumer-group-id> \
+--ssl.truststore.location /tmp/kafka.client.truststore.jks \
+--ssl.keystore.location /tmp/kafka.client.keystore.jks \
+--ssl.keystore.password <keystore-password> \
+--ssl.key.password <keypassword>
 ``` 
 > There need to set parameter `-Dclassloader.resolve-order=parent-first` for resolve conflict of kafka.
 

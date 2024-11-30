@@ -121,6 +121,7 @@ public class KafkaS3Sink {
         }
 
 
+        @SuppressWarnings("unused")
         public void open(Configuration parameters) {
             jsonParser = new ObjectMapper();
             recordCount = 0;
