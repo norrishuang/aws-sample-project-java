@@ -5,9 +5,14 @@ package com.amazonaws.java.flink;
 import java.util.Properties;
 
 import com.amazonaws.java.flink.common.CDCRecords;
+import com.amazonaws.java.flink.common.StringKafkaRecordDeserializer;
+
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.kafka.source.KafkaSource;
+import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.avro.ParquetAvroWriters;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
@@ -20,6 +25,10 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.config.SslConfigs;
+
+
 
 /**
  * Consumer data from MSK(via TLS) to S3
@@ -64,31 +73,45 @@ public class KafkaS3SinkParquet {
         properties.setProperty("security.protocol", "SSL");
 
         // TLS/SSL configuration
-        properties.setProperty("ssl.truststore.location", applicationProperties.get("ssl.truststore.location","/tmp/kafka.client.truststore.jks"));
+        properties.setProperty(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, applicationProperties.get("ssl.truststore.location","/tmp/kafka.client.truststore.jks"));
 //        properties.setProperty("ssl.truststore.password", "amazon123");
-        properties.setProperty("ssl.keystore.location", applicationProperties.get("ssl.keystore.location","/tmp/kafka.client.keystore.jks"));
-        properties.setProperty("ssl.keystore.password", applicationProperties.get("ssl.keystore.password","amazon123"));
-        properties.setProperty("ssl.key.password", applicationProperties.get("ssl.key.password","amazon123"));
+        properties.setProperty(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, applicationProperties.get("ssl.keystore.location","/tmp/kafka.client.keystore.jks"));
+        properties.setProperty(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, applicationProperties.get("ssl.keystore.password","amazon123"));
+        properties.setProperty(SslConfigs.SSL_KEY_PASSWORD_CONFIG, applicationProperties.get("ssl.key.password","amazon123"));
 
-        // Create Kafka Consumer
+
+        // KafkaSource<String> dataSource = KafkaSource.<String>builder()
+        //         .setProperties(properties)
+        //         //从commit开始，没有则从最早
+        //         .setStartingOffsets(OffsetsInitializer.committedOffsets(OffsetResetStrategy.EARLIEST))
+        //         .setTopics(kafka_topic)
+        //         .setDeserializer(new StringKafkaRecordDeserializer())
+        //         .build();
+     
+                // Create Kafka Consumer
         FlinkKafkaConsumer<String> consumer = new FlinkKafkaConsumer<>(
                 kafka_topic,                // topic
                 new SimpleStringSchema(),    // deserializer
                 properties                   // properties
         );
+        consumer.setStartFromLatest();    // start from latest
+        DataStream<String> dataStreamSource = env.addSource(consumer);
 
         // Optional: set starting position
-        consumer.setStartFromEarliest();     // start from earliest
+        // consumer.setStartFromEarliest();     // start from earliest
         // or
         // consumer.setStartFromLatest();    // start from latest
         // or
         // consumer.setStartFromTimestamp(System.currentTimeMillis()); // start from specific timestamp
 
         // Add source to Flink job
-        DataStream<String> input = env.addSource(consumer);
+        // DataStream<String> input = env.addSource(consumer);
+
+        // DataStream<String> input = env.fromSource(dataSource, WatermarkStrategy.noWatermarks(), "Kafka source");
+
         ObjectMapper jsonParser = new ObjectMapper();
 
-        input.map(value -> { // Parse the JSON
+        dataStreamSource.map(value -> { // Parse the JSON
             JsonNode jsonNode = jsonParser.readValue(value, JsonNode.class);
                     CDCRecords records = new CDCRecords(
                             jsonNode.get("before").toString(),
