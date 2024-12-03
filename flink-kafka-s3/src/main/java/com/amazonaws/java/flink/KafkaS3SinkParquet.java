@@ -80,6 +80,7 @@ public class KafkaS3SinkParquet {
         properties.setProperty(SslConfigs.SSL_KEY_PASSWORD_CONFIG, applicationProperties.get("ssl.key.password","amazon123"));
 
 
+        // Flink version 1.17 above
         // KafkaSource<String> dataSource = KafkaSource.<String>builder()
         //         .setProperties(properties)
         //         //从commit开始，没有则从最早
@@ -87,8 +88,12 @@ public class KafkaS3SinkParquet {
         //         .setTopics(kafka_topic)
         //         .setDeserializer(new StringKafkaRecordDeserializer())
         //         .build();
+
+        // DataStream<String> input = env.fromSource(dataSource, WatermarkStrategy.noWatermarks(), "Kafka source");
+
      
-                // Create Kafka Consumer
+        // Create Kafka Consumer (flink 1.12.1)
+        // Flink version 1.12.1
         FlinkKafkaConsumer<String> consumer = new FlinkKafkaConsumer<>(
                 kafka_topic,                // topic
                 new SimpleStringSchema(),    // deserializer
@@ -97,17 +102,7 @@ public class KafkaS3SinkParquet {
         consumer.setStartFromLatest();    // start from latest
         DataStream<String> dataStreamSource = env.addSource(consumer);
 
-        // Optional: set starting position
-        // consumer.setStartFromEarliest();     // start from earliest
-        // or
-        // consumer.setStartFromLatest();    // start from latest
-        // or
-        // consumer.setStartFromTimestamp(System.currentTimeMillis()); // start from specific timestamp
 
-        // Add source to Flink job
-        // DataStream<String> input = env.addSource(consumer);
-
-        // DataStream<String> input = env.fromSource(dataSource, WatermarkStrategy.noWatermarks(), "Kafka source");
 
         ObjectMapper jsonParser = new ObjectMapper();
 
