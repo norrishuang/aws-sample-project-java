@@ -19,6 +19,5 @@
 |                              |                                    |
 
 
-## 提示
-1. Flink OpenSearch Connector 只支持到 OpenSearch 1.x 版本(OpenSearch 需要是1.x的版本)
-2. 由于 KDA（MSF）未集成 Iceberg，因此需要通过重写类的方式支持，注意代码中的内容。
+>提示
+>1. 由于 KDA（MSF）未集成 Iceberg，因此需要通过重写类的方式支持，参见Blog[如何通过 AWS Managed Apache Flink 实现 Iceberg 的实时同步](https://blog.csdn.net/Turk/article/details/138824222)。

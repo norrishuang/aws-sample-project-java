@@ -56,7 +56,7 @@ public class KafkaToOpenSearch {
                   + "'properties.bootstrap.servers' = '%s',\n"
                   + "'scan.startup.mode' = 'earliest-offset',\n"
                   + "'properties.group.id' = 'flink-workshop-group-test-tb1',\n"
-                  + "'json.timestamp-format.standard' = 'ISO-8601', \n"
+//                  + "'json.timestamp-format.standard' = 'ISO-8601', \n"
                   + "'format' = 'debezium-json'\n"
                   + ");",
               kafka_topic, kafka_bootstrap_servers);
@@ -77,7 +77,7 @@ public class KafkaToOpenSearch {
                   + "unit INT, \n"
                   + "ts TIMESTAMP(3) \n"
                   + ") WITH (\n"
-                  + "  'connector' = 'opensearch',\n"
+                  + "  'connector' = 'opensearch-2',\n"
                   + "  'hosts' = '%s',\n"
                   + "  'username' = '%s',\n"
                   + "  'password' = '%s',\n"
