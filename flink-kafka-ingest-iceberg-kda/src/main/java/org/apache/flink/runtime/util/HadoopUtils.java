@@ -1,4 +1,4 @@
-package util;
+package org.apache.flink.runtime.util;
 
 import org.apache.hadoop.conf.Configuration;
 
