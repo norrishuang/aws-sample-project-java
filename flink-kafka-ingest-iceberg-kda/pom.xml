@@ -124,13 +124,6 @@
             <version>${flink.version}</version>
         </dependency>
 
-        <!-- Amazon Managed Service for Apache Flink (formerly Amazon Kinesis Data Analytics) runtime-->
-<!--        <dependency>-->
-<!--            <groupId>com.amazonaws</groupId>-->
-<!--            <artifactId>aws-kinesisanalytics-runtime</artifactId>-->
-<!--            <version>${kda.runtime.version}</version>-->
-<!--            <scope>provided</scope>-->
-<!--        </dependency>-->
 
         <!-- Flink Kafka connector -->
         <dependency>

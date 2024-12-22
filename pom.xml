@@ -15,6 +15,7 @@
         <module>flink-kafka-opensearch</module>
         <module>flink-kafka-s3</module>
         <module>flink-kafka-ingest-iceberg-kda</module>
+        <module>flink-kafka-s3-kda</module>
     </modules>
 
     <properties>

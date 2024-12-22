@@ -2,24 +2,22 @@
 
 package com.amazonaws.java.flink;
 
+import com.amazonaws.java.flink.common.CDCRecords;
+import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
-import com.amazonaws.java.flink.common.CDCRecords;
-import com.amazonaws.java.flink.common.StringKafkaRecordDeserializer;
-
-import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.formats.parquet.avro.ParquetAvroWriters;
+import org.apache.flink.formats.parquet.avro.AvroParquetWriters;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -28,13 +26,11 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.filesystem.OutputFileConfig;
 import org.apache.flink.streaming.api.functions.sink.filesystem.StreamingFileSink;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.DateTimeBucketAssigner;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.hadoop.metrics2.sink.FileSink;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.config.SslConfigs;
-
-
 
 /**
  * Consumer data from MSK(via TLS) to S3
@@ -57,16 +53,31 @@ public class KafkaS3SinkParquet {
     }
 
 
-    private static StreamingFileSink<CDCRecords> createS3SinkFromStaticConfig(String s3SinkPath) {
+//    private static StreamingFileSink<CDCRecords> createS3SinkFromStaticConfig(String s3SinkPath) {
+//
+//
+//        return StreamingFileSink
+//                .forBulkFormat(new Path(s3SinkPath), ParquetAvroWriters.forReflectRecord(CDCRecords.class))
+//                // Use hive style partitioning
+//                .withBucketAssigner(new DateTimeBucketAssigner<>("'year='yyyy'/month='MM'/day='dd'/hour='HH/"))
+//                .withOutputFileConfig(OutputFileConfig.builder()
+//                        .withPartSuffix(".parquet")
+//                        .build())
+//                .build();
+//    }
+
+    private static StreamingFileSink<CDCRecords> createS3SinkFromStaticConfig(
+            String s3SinkPath
+    ) {
         return StreamingFileSink
-                .forBulkFormat(new Path(s3SinkPath), ParquetAvroWriters.forReflectRecord(CDCRecords.class))
-                // Use hive style partitioning
+                .forBulkFormat(new Path(s3SinkPath), AvroParquetWriters.forReflectRecord(CDCRecords.class))
                 .withBucketAssigner(new DateTimeBucketAssigner<>("'year='yyyy'/month='MM'/day='dd'/hour='HH/"))
                 .withOutputFileConfig(OutputFileConfig.builder()
                         .withPartSuffix(".parquet")
                         .build())
                 .build();
     }
+
 
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -113,26 +124,26 @@ public class KafkaS3SinkParquet {
         }
 
         // Flink version 1.17 above
-        // KafkaSource<String> dataSource = KafkaSource.<String>builder()
-        //         .setProperties(properties)
-        //         //从commit开始，没有则从最早
-        //         .setStartingOffsets(OffsetsInitializer.committedOffsets(OffsetResetStrategy.EARLIEST))
-        //         .setTopics(kafka_topic)
-        //         .setDeserializer(new StringKafkaRecordDeserializer())
-        //         .build();
+         KafkaSource<String> dataSource = KafkaSource.<String>builder()
+                 .setProperties(properties)
+                 //从commit开始，没有则从最早
+                 .setStartingOffsets(OffsetsInitializer.committedOffsets(OffsetResetStrategy.EARLIEST))
+                 .setValueOnlyDeserializer(new SimpleStringSchema())
+                 .setTopics(kafka_topic)
+                 .build();
 
-        // DataStream<String> input = env.fromSource(dataSource, WatermarkStrategy.noWatermarks(), "Kafka source");
+         DataStream<String> dataStreamSource = env.fromSource(dataSource, WatermarkStrategy.noWatermarks(), "Kafka source");
 
      
         // Create Kafka Consumer (flink 1.12.1)
         // Flink version 1.12.1
-        FlinkKafkaConsumer<String> consumer = new FlinkKafkaConsumer<>(
-                kafka_topic,                // topic
-                new SimpleStringSchema(),    // deserializer
-                properties                   // properties
-        );
-        consumer.setStartFromLatest();    // start from latest
-        DataStream<String> dataStreamSource = env.addSource(consumer);
+//        FlinkKafkaConsumer<String> consumer = new FlinkKafkaConsumer<>(
+//                kafka_topic,                // topic
+//                new SimpleStringSchema(),    // deserializer
+//                properties                   // properties
+//        );
+//        consumer.setStartFromLatest();    // start from latest
+//        DataStream<String> dataStreamSource = env.addSource(dataSource);
 
 
 
