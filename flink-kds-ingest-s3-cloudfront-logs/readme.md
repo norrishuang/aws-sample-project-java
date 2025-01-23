@@ -114,6 +114,12 @@ LOCATION 's3://<s3bucket>/data/cloudfront-logs/'
 TBLPROPERTIES ('parquet.compression'='SNAPPY');
 ```
 
+## Refresh partitions
+need refresh the partitions after the logs are written to S3.
+```sql
+MSCK REPAIR TABLE s3_db.cloudfront_real_time_logs
+```
+
 # Build the project
 ```shell
 mvn clean package
