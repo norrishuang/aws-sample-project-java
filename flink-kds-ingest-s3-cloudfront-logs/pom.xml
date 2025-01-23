@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-sample-project-java</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>flink-kds-ingest-s3-cloudfront-logs</artifactId>
+
+    <properties>
+        <target.java.version>11</target.java.version>
+        <maven.compiler.source>${target.java.version}</maven.compiler.source>
+        <maven.compiler.target>${target.java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <flink.version>1.19.1</flink.version>
+        <flink.kds.connector.version>4.3.0-1.19</flink.kds.connector.version>
+        <kda.runtime.version>1.2.0</kda.runtime.version>
+        <iceberg.version>1.4.2</iceberg.version>
+        <hadoop.version>3.3.2</hadoop.version>
+        <avro.version>1.10.2</avro.version>
+        <parquet-avro.version>1.12.3</parquet-avro.version>
+        <log4j.version>2.17.1</log4j.version>
+    </properties>
+
+
+    <dependencies>
+
+
+        <!-- Amazon Managed Service for Apache Flink (formerly Amazon Kinesis Data Analytics) runtime-->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-kinesisanalytics-runtime</artifactId>
+            <version>${kda.runtime.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.flink</groupId>-->
+<!--            <artifactId>flink-s3-fs-hadoop</artifactId>-->
+<!--            <version>${flink.version}</version>-->
+<!--        </dependency>-->
+        <!-- https://mvnrepository.com/artifact/org.apache.flink/flink-table-planner -->
+        <!-- solve:Could not instantiate the executor. Make sure a planner module is on the classpath -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-table-planner_2.12</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+
+        <!-- Flink Kinesis connector -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-kinesis</artifactId>
+            <version>${flink.kds.connector.version}</version>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.flink</groupId>-->
+<!--            <artifactId>flink-connector-aws-kinesis-streams</artifactId>-->
+<!--            <version>${flink.kds.connector.version}</version>-->
+<!--        </dependency>-->
+
+        <!-- Flink Parquet -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-parquet</artifactId>
+            <version>${flink.version}</version>
+            <scope>compile</scope>
+        </dependency>
+
+
+        <!-- Flink Avro -->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.flink</groupId>-->
+<!--            <artifactId>flink-avro</artifactId>-->
+<!--            <version>${flink.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>org.apache.avro</groupId>-->
+<!--            <artifactId>avro</artifactId>-->
+<!--            <version>${avro.version}</version>-->
+<!--        </dependency>-->
+
+        <!-- Hadoop and Parquet (Not need If run in EMR Cluster)-->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>${parquet-avro.version}</version>
+        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.apache.hadoop</groupId>-->
+<!--            <artifactId>hadoop-client</artifactId>-->
+<!--            <version>${hadoop.version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>org.apache.hadoop</groupId>-->
+<!--            <artifactId>hadoop-aws</artifactId>-->
+<!--            <version>${hadoop.version}</version>-->
+<!--        </dependency>-->
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Java Compiler -->
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.1</version>
+                <configuration>
+                    <source>${target.java.version}</source>
+                    <target>${target.java.version}</target>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <!-- Run shade goal on package phase -->
+
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.apache.flink:flink-shaded-force-shading</exclude>
+                                    <exclude>commons-cli:*</exclude>
+                                    <exclude>com.google.code.findbugs:jsr305</exclude>
+                                    <exclude>org.slf4j:*</exclude>
+                                    <exclude>org.apache.logging.log4j:*</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <!-- Do not copy the signatures in the META-INF folder.
+                                    Otherwise, this might cause SecurityExceptions when using the JAR. -->
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.amazonaws.java.flink.CloudFrontLogsIngest</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+
+
+
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

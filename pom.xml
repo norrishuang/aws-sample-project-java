@@ -16,6 +16,7 @@
         <module>flink-kafka-s3</module>
         <module>flink-kafka-ingest-iceberg-kda</module>
         <module>flink-kafka-s3-kda</module>
+        <module>flink-kds-ingest-s3-cloudfront-logs</module>
     </modules>
 
     <properties>
