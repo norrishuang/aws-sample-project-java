@@ -24,3 +24,5 @@
 
 >提示
 >1. 由于 KDA（MSF）未集成 Iceberg，因此需要通过重写类的方式支持，参见Blog[如何通过 AWS Managed Apache Flink 实现 Iceberg 的实时同步](https://blog.csdn.net/Turk/article/details/138824222)。
+
+Plan: RDS to OpenSearch
