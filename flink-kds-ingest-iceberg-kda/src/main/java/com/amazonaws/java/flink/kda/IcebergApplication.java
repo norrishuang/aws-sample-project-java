@@ -26,6 +26,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.LocalStreamEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.StatementSet;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,12 +105,13 @@ public class IcebergApplication {
 			LOG.info(icebergCatalog);
 			streamTableEnvironment.executeSql(icebergCatalog);
 
-			final String sourceKinesis = String.format("CREATE TABLE IF NOT EXISTS KinesisTable (\n" +
+			final String sourceKinesis = String.format("CREATE TABLE IF NOT EXISTS customer_info (\n" +
 					"  `customerId` BIGINT,\n" +
 					"  `transactionAmount` BIGINT,\n" +
 					"  `sourceIp` STRING,\n" +
 					"  `status` STRING,\n" +
-					"  `transactionTime` STRING\n" +
+					"  `transactionTime` TIMESTAMP(3),\n" +
+					"  WATERMARK FOR transactionTime AS transactionTime - INTERVAL '5' SECOND\n" +
 					")\n" +
 					"WITH (\n" +
 					"  'connector' = 'kinesis',\n" +
@@ -124,12 +126,12 @@ public class IcebergApplication {
 			LOG.info(sourceKinesis);
 			streamTableEnvironment.executeSql(sourceKinesis);
 
-			final String icebergSink = String.format("CREATE TABLE flink_catalog.iceberg_db.customer_info_flinksql_03 ( \n" +
+			final String icebergSink = String.format("CREATE TABLE IF NOT EXISTS flink_catalog.iceberg_db.customer_info_flinksql_03 ( \n" +
 					"  `customerId` BIGINT,\n" +
 					"  `transactionAmount` BIGINT,\n" +
 					"  `sourceIp` STRING,\n" +
 					"  `status` STRING,\n" +
-					"  `transactionTime` STRING\n" +
+					"  `transactionTime` TIMESTAMP(3)\n" +
 					") with ( \n" +
 					"'type'='iceberg', \n" +
 					"'warehouse'='%s', \n" +
@@ -138,12 +140,34 @@ public class IcebergApplication {
 					"'write.metadata.previous-versions-max'='5', \n" +
 					"'format-version'='2');", warehousePath);
 			LOG.info(icebergSink);
+            streamTableEnvironment.executeSql(icebergSink);
 
-			streamTableEnvironment.executeSql(icebergSink);
+            final String icebergSinkStat = String.format("CREATE TABLE IF NOT EXISTS flink_catalog.iceberg_db.customer_info_stat ( \n" +
+                    "  `customerId` BIGINT,\n" +
+                    "  `cnt` BIGINT,\n" +
+                    "  `triggerTs` TIMESTAMP_LTZ(3)\n" +
+                    ") with ( \n" +
+                    "'type'='iceberg', \n" +
+                    "'warehouse'='%s', \n" +
+                    "'catalog-name'='flink_catalog', \n" +
+                    "'write.metadata.delete-after-commit.enabled'='true', \n" +
+                    "'write.metadata.previous-versions-max'='5', \n" +
+                    "'format-version'='2');", warehousePath);
+            LOG.info(icebergSinkStat);
+
+			streamTableEnvironment.executeSql(icebergSinkStat);
 
 			final String insertSql = "insert into flink_catalog.iceberg_db.customer_info_flinksql_03 \n" +
 					"select * from default_catalog.default_database.customer_info;";
-			streamTableEnvironment.executeSql(insertSql);
+
+            final String statSQL = "insert into flink_catalog.iceberg_db.customer_info_stat SELECT customerId, count(*) cnt, window_end as triggerTs " +
+                    "FROM TABLE(HOP(TABLE customer_info,DESCRIPTOR(transactionTime),INTERVAL '20' SECOND,INTERVAL '60' MINUTE)) " +
+                    "GROUP BY customerId, window_start, window_end ";
+
+            StatementSet stmtSet = streamTableEnvironment.createStatementSet();
+            stmtSet.addInsertSql(insertSql);
+            stmtSet.addInsertSql(statSQL);
+            stmtSet.execute();
 		}
 	}
 
