@@ -105,69 +105,79 @@ public class IcebergApplication {
 			LOG.info(icebergCatalog);
 			streamTableEnvironment.executeSql(icebergCatalog);
 
-			final String sourceKinesis = String.format("CREATE TABLE IF NOT EXISTS customer_info (\n" +
-					"  `customerId` BIGINT,\n" +
-					"  `transactionAmount` BIGINT,\n" +
-					"  `sourceIp` STRING,\n" +
-					"  `status` STRING,\n" +
-					"  `transactionTime` TIMESTAMP(3),\n" +
-					"  WATERMARK FOR transactionTime AS transactionTime - INTERVAL '5' SECOND\n" +
-					")\n" +
-					"WITH (\n" +
-					"  'connector' = 'kinesis',\n" +
-					"  'stream' = '%s',\n" +
-					"  'aws.region' = 'us-east-1',\n" +
-					"  'scan.stream.initpos' = 'LATEST',\n" +
-					"  'format' = 'json'\n" +
-					");", kds_stream);
+      final String sourceKinesis =
+          String.format(
+              "CREATE TABLE IF NOT EXISTS customer_info (\n"
+                  + "  `customerId` BIGINT,\n"
+                  + "  `transactionAmount` BIGINT,\n"
+                  + "  `sourceIp` STRING,\n"
+                  + "  `status` STRING,\n"
+                  + "  `transactionTime` TIMESTAMP(3),\n"
+                  + "  WATERMARK FOR transactionTime AS transactionTime - INTERVAL '5' SECOND\n"
+                  + ")\n"
+                  + "WITH (\n"
+                  + "  'connector' = 'kinesis',\n"
+                  + "  'stream' = '%s',\n"
+                  + "  'aws.region' = 'us-east-1',\n"
+                  + "  'scan.stream.initpos' = 'LATEST',\n"
+                  + "  'format' = 'json'\n"
+                  + ");",
+              kds_stream);
 
 			streamTableEnvironment.executeSql(sourceKinesis);
 
 			LOG.info(sourceKinesis);
 			streamTableEnvironment.executeSql(sourceKinesis);
 
-			final String icebergSink = String.format("CREATE TABLE IF NOT EXISTS flink_catalog.iceberg_db.customer_info_flinksql_03 ( \n" +
-					"  `customerId` BIGINT,\n" +
-					"  `transactionAmount` BIGINT,\n" +
-					"  `sourceIp` STRING,\n" +
-					"  `status` STRING,\n" +
-					"  `transactionTime` TIMESTAMP(3)\n" +
-					") with ( \n" +
-					"'type'='iceberg', \n" +
-					"'warehouse'='%s', \n" +
-					"'catalog-name'='flink_catalog', \n" +
-					"'write.metadata.delete-after-commit.enabled'='true', \n" +
-					"'write.metadata.previous-versions-max'='5', \n" +
-					"'format-version'='2');", warehousePath);
+      final String icebergSink =
+          String.format(
+              "CREATE TABLE IF NOT EXISTS flink_catalog.iceberg_db.customer_info_flinksql_03 ( \n"
+                  + "  `customerId` BIGINT,\n"
+                  + "  `transactionAmount` BIGINT,\n"
+                  + "  `sourceIp` STRING,\n"
+                  + "  `status` STRING,\n"
+                  + "  `transactionTime` TIMESTAMP(3)\n"
+                  + ") with ( \n"
+                  + "'type'='iceberg', \n"
+                  + "'warehouse'='%s', \n"
+                  + "'catalog-name'='flink_catalog', \n"
+                  + "'write.metadata.delete-after-commit.enabled'='true', \n"
+                  + "'write.metadata.previous-versions-max'='5', \n"
+                  + "'format-version'='2');",
+              warehousePath);
 			LOG.info(icebergSink);
-            streamTableEnvironment.executeSql(icebergSink);
+      streamTableEnvironment.executeSql(icebergSink);
 
-            final String icebergSinkStat = String.format("CREATE TABLE IF NOT EXISTS flink_catalog.iceberg_db.customer_info_stat ( \n" +
-                    "  `customerId` BIGINT,\n" +
-                    "  `cnt` BIGINT,\n" +
-                    "  `triggerTs` TIMESTAMP_LTZ(3)\n" +
-                    ") with ( \n" +
-                    "'type'='iceberg', \n" +
-                    "'warehouse'='%s', \n" +
-                    "'catalog-name'='flink_catalog', \n" +
-                    "'write.metadata.delete-after-commit.enabled'='true', \n" +
-                    "'write.metadata.previous-versions-max'='5', \n" +
-                    "'format-version'='2');", warehousePath);
-            LOG.info(icebergSinkStat);
+      final String icebergSinkStat =
+          String.format(
+              "CREATE TABLE IF NOT EXISTS flink_catalog.iceberg_db.customer_info_stat ( \n"
+                  + "  `customerId` BIGINT,\n"
+                  + "  `cnt` BIGINT,\n"
+                  + "  `triggerTs` TIMESTAMP_LTZ(3)\n"
+                  + ") with ( \n"
+                  + "'type'='iceberg', \n"
+                  + "'warehouse'='%s', \n"
+                  + "'catalog-name'='flink_catalog', \n"
+                  + "'write.metadata.delete-after-commit.enabled'='true', \n"
+                  + "'write.metadata.previous-versions-max'='5', \n"
+                  + "'format-version'='2');",
+              warehousePath);
+      LOG.info(icebergSinkStat);
 
-			streamTableEnvironment.executeSql(icebergSinkStat);
+      streamTableEnvironment.executeSql(icebergSinkStat);
 
 			final String insertSql = "insert into flink_catalog.iceberg_db.customer_info_flinksql_03 \n" +
 					"select * from default_catalog.default_database.customer_info;";
 
-            final String statSQL = "insert into flink_catalog.iceberg_db.customer_info_stat SELECT customerId, count(*) cnt, window_end as triggerTs " +
-                    "FROM TABLE(HOP(TABLE customer_info,DESCRIPTOR(transactionTime),INTERVAL '20' SECOND,INTERVAL '60' MINUTE)) " +
-                    "GROUP BY customerId, window_start, window_end ";
+      final String statSQL =
+          "insert into flink_catalog.iceberg_db.customer_info_stat SELECT customerId, count(*) cnt, window_end as triggerTs "
+              + "FROM TABLE(HOP(TABLE customer_info,DESCRIPTOR(transactionTime),INTERVAL '20' SECOND,INTERVAL '60' MINUTE)) "
+              + "GROUP BY customerId, window_start, window_end ";
 
-            StatementSet stmtSet = streamTableEnvironment.createStatementSet();
-            stmtSet.addInsertSql(insertSql);
-            stmtSet.addInsertSql(statSQL);
-            stmtSet.execute();
+      StatementSet stmtSet = streamTableEnvironment.createStatementSet();
+      stmtSet.addInsertSql(insertSql);
+      stmtSet.addInsertSql(statSQL);
+      stmtSet.execute();
 		}
 	}
 
