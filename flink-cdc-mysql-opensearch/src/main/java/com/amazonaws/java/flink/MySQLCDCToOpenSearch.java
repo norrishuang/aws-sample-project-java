@@ -28,6 +28,24 @@ public class MySQLCDCToOpenSearch {
 
     public static class CDCPipeline {
 
+        /**
+         * Gets a configuration parameter from multiple sources in priority order:
+         * 1. Command-line arguments (via ParameterTool)
+         * 2. Environment variables
+         * 3. Default value
+         */
+        private static String getConfigParameter(ParameterTool params, String paramKey, 
+                                                  String envKey, String defaultValue) {
+            String value = params.get(paramKey);
+            if (value == null || value.isEmpty()) {
+                value = System.getenv(envKey);
+            }
+            if (value == null || value.isEmpty()) {
+                value = defaultValue;
+            }
+            return value;
+        }
+
         public static void createAndDeployJob(
                 StreamExecutionEnvironment env, ParameterTool applicationProperties) {
             try {
@@ -39,23 +57,30 @@ public class MySQLCDCToOpenSearch {
                 Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
                 configuration.setString("execution.checkpointing.interval", "1 min");
 
-                // Get configuration parameters (with defaults for testing)
-                String mysqlHostname = applicationProperties.get(
-                        "mysql.hostname", 
-                        "mysql-cdc-db.cghfgy0zyjlk.us-east-1.rds.amazonaws.com");
-                String mysqlPort = applicationProperties.get("mysql.port", "3306");
-                String mysqlUsername = applicationProperties.get("mysql.username", "admin");
-                String mysqlPassword = applicationProperties.get("mysql.password", "Amazon123");
-                String mysqlDatabase = applicationProperties.get("mysql.database", "norrisdb");
-                String mysqlTable = applicationProperties.get("mysql.table", "user_order_list");
-                String mysqlServerTimezone = applicationProperties.get("mysql.server-timezone", "UTC");
+                // Get configuration parameters from command-line args, environment variables, or placeholders
+                String mysqlHostname = getConfigParameter(
+                        applicationProperties, "mysql.hostname", "MYSQL_HOSTNAME", "<mysql-host>");
+                String mysqlPort = getConfigParameter(
+                        applicationProperties, "mysql.port", "MYSQL_PORT", "3306");
+                String mysqlUsername = getConfigParameter(
+                        applicationProperties, "mysql.username", "MYSQL_USERNAME", "<mysql-username>");
+                String mysqlPassword = getConfigParameter(
+                        applicationProperties, "mysql.password", "MYSQL_PASSWORD", "<mysql-password>");
+                String mysqlDatabase = getConfigParameter(
+                        applicationProperties, "mysql.database", "MYSQL_DATABASE", "<mysql-database>");
+                String mysqlTable = getConfigParameter(
+                        applicationProperties, "mysql.table", "MYSQL_TABLE", "<mysql-table>");
+                String mysqlServerTimezone = getConfigParameter(
+                        applicationProperties, "mysql.server-timezone", "MYSQL_SERVER_TIMEZONE", "UTC");
 
-                String opensearchHost = applicationProperties.get(
-                        "opensearch.host", 
-                        "https://search-es-beg-test-bvu7xxqngc6kvt3tyh2rgqywk4.us-east-1.es.amazonaws.com:443");
-                String opensearchIndex = applicationProperties.get("opensearch.index", "user_order_list");
-                String opensearchUsername = applicationProperties.get("opensearch.username", "admin");
-                String opensearchPassword = applicationProperties.get("opensearch.password", "C6VxZyep)8>2");
+                String opensearchHost = getConfigParameter(
+                        applicationProperties, "opensearch.host", "OPENSEARCH_HOST", "<opensearch-host>");
+                String opensearchIndex = getConfigParameter(
+                        applicationProperties, "opensearch.index", "OPENSEARCH_INDEX", "<opensearch-index>");
+                String opensearchUsername = getConfigParameter(
+                        applicationProperties, "opensearch.username", "OPENSEARCH_USERNAME", "<opensearch-username>");
+                String opensearchPassword = getConfigParameter(
+                        applicationProperties, "opensearch.password", "OPENSEARCH_PASSWORD", "<opensearch-password>");
 
                 LOG.info("MySQL Source Configuration - Host: {}, Port: {}, Database: {}, Table: {}", 
                          mysqlHostname, mysqlPort, mysqlDatabase, mysqlTable);
