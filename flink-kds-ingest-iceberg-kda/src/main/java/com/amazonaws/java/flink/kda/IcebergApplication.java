@@ -81,6 +81,13 @@ public class IcebergApplication {
 
 			Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
 			configuration.setString("execution.checkpointing.interval", "1 min");
+      // 更激进的 TTL 配置 - 缩短状态保留时间
+      configuration.setString("table.exec.state.ttl", "10 min");
+      // 启用状态清理优化
+      configuration.setString("table.optimizer.agg-phase-strategy", "TWO_PHASE");
+      configuration.setString("table.exec.mini-batch.enabled", "true");
+      configuration.setString("table.exec.mini-batch.allow-latency", "5s");
+      configuration.setString("table.exec.mini-batch.size", "5000");
 ////
 
 
