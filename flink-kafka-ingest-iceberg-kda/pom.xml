@@ -17,11 +17,11 @@
         <maven.compiler.target>${target.java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flink.version>1.20.0</flink.version>
-        <flink.kds.connector.version>1.15.2</flink.kds.connector.version>
+        <flink.kds.connector.version>1.20.0</flink.kds.connector.version>
         <kda.runtime.version>1.2.0</kda.runtime.version>
-        <iceberg.version>1.6.0</iceberg.version>
-        <hadoop.version>3.4.1</hadoop.version>
-        <avro.version>1.10.2</avro.version>
+        <iceberg.version>1.6.1</iceberg.version>
+        <hadoop.version>3.3.4</hadoop.version>
+        <avro.version>1.11.3</avro.version>
         <log4j.version>2.17.1</log4j.version>
     </properties>
 
@@ -61,21 +61,69 @@
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-core</artifactId>
             <version>${iceberg.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-databind</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-annotations</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-jackson</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-flink</artifactId>
             <version>${iceberg.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-flink-1.18</artifactId>
             <version>${iceberg.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-aws-bundle</artifactId>
             <version>${iceberg.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-databind</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-annotations</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
+                    <artifactId>parquet-jackson</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.iceberg</groupId>
@@ -83,11 +131,57 @@
             <version>${iceberg.version}</version>
         </dependency>
 
+        <!-- Use compatible Jackson versions -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+
+        <!-- Use compatible parquet-jackson version -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-jackson</artifactId>
+            <version>1.13.1</version>
+        </dependency>
+
+        <!-- Add compatible Parquet versions -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-hadoop</artifactId>
+            <version>1.13.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>1.13.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-column</artifactId>
+            <version>1.13.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-common</artifactId>
+            <version>1.13.1</version>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
             <version>${hadoop.version}</version>
-            <scope>provided</scope>
+            <!-- <scope>provided</scope> -->
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.avro</groupId>
@@ -101,6 +195,11 @@
                 <!-- exclude BouncyCastle to avoid Java version conflicts -->
                 <exclusion>
                     <groupId>org.bouncycastle</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <!-- exclude parquet to avoid conflicts -->
+                <exclusion>
+                    <groupId>org.apache.parquet</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -142,13 +241,13 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka</artifactId>
-            <version>3.0.2-1.18</version>
+            <version>3.3.0-1.20</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-sql-connector-kafka</artifactId>
-            <version>3.0.2-1.18</version>
+            <version>3.3.0-1.20</version>
         </dependency>
     </dependencies>
 
@@ -202,20 +301,20 @@
                             </filters>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.amazonaws.java.flink.kda.MSKJsonIcebergSink</mainClass>
+                                    <mainClass>com.amazonaws.java.flink.kda.IcebergApplication</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
-                            <!--                            <relocations>-->
-                            <!--                                <relocation>-->
-                            <!--                                    <pattern>org.apache.hadoop.conf</pattern>-->
-                            <!--                                    <shadedPattern>shaded.org.apache.hadoop.conf</shadedPattern>-->
-                            <!--                                </relocation>-->
-                            <!--                                <relocation>-->
-                            <!--                                    <pattern>org.apache.flink.runtime.util_t.HadoopUtils</pattern>-->
-                            <!--                                    <shadedPattern>shadow.org.apache.flink.runtime.util_t.HadoopUtils</shadedPattern>-->
-                            <!--                                </relocation>-->
-                            <!--                            </relocations>-->
+                                                       <relocations>
+                                                           <relocation>
+                                                               <pattern>org.apache.hadoop.conf</pattern>
+                                                               <shadedPattern>shaded.org.apache.hadoop.conf</shadedPattern>
+                                                           </relocation>
+                                                           <relocation>
+                                                               <pattern>org.apache.flink.runtime.util.HadoopUtils</pattern>
+                                                               <shadedPattern>shadow.org.apache.flink.runtime.util.HadoopUtils</shadedPattern>
+                                                           </relocation>
+                                                  </relocations>
                         </configuration>
                     </execution>
                 </executions>
