@@ -1,12 +1,19 @@
 package com.amazonaws.java.flink;
 
+import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.environment.LocalStreamEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 
 /**
  * Flink CDC application for streaming data from MySQL to OpenSearch.
@@ -15,10 +22,32 @@ import org.slf4j.LoggerFactory;
 public class MySQLCDCToOpenSearch {
     private static final Logger LOG = LoggerFactory.getLogger(MySQLCDCToOpenSearch.class);
 
+    private static ParameterTool loadApplicationParameters(String[] args, StreamExecutionEnvironment env) throws IOException {
+        if (env instanceof LocalStreamEnvironment) {
+            return ParameterTool.fromArgs(args);
+        } else {
+            // Try to load from KDA runtime properties first (for Managed Flink)
+            try {
+                Map<String, Properties> applicationProperties = KinesisAnalyticsRuntime.getApplicationProperties();
+                Properties flinkProperties = applicationProperties.get("FlinkApplicationProperties");
+                if (flinkProperties != null) {
+                    Map<String, String> map = new HashMap<>(flinkProperties.size());
+                    flinkProperties.forEach((k, v) -> map.put((String) k, (String) v));
+                    return ParameterTool.fromMap(map);
+                }
+            } catch (Exception e) {
+                LOG.info("Unable to load from KDA runtime properties, trying command line args for EMR: " + e.getMessage());
+            }
+            
+            // Fallback to command line arguments (for EMR Flink)
+            return ParameterTool.fromArgs(args);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // Set up the streaming execution environment
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        final ParameterTool applicationProperties = ParameterTool.fromArgs(args);
+        final ParameterTool applicationProperties = loadApplicationParameters(args, env);
 
         LOG.info("Starting MySQL CDC to OpenSearch pipeline");
 
@@ -27,24 +56,6 @@ public class MySQLCDCToOpenSearch {
     }
 
     public static class CDCPipeline {
-
-        /**
-         * Gets a configuration parameter from multiple sources in priority order:
-         * 1. Command-line arguments (via ParameterTool)
-         * 2. Environment variables
-         * 3. Default value
-         */
-        private static String getConfigParameter(ParameterTool params, String paramKey, 
-                                                  String envKey, String defaultValue) {
-            String value = params.get(paramKey);
-            if (value == null || value.isEmpty()) {
-                value = System.getenv(envKey);
-            }
-            if (value == null || value.isEmpty()) {
-                value = defaultValue;
-            }
-            return value;
-        }
 
         public static void createAndDeployJob(
                 StreamExecutionEnvironment env, ParameterTool applicationProperties) {
@@ -55,41 +66,32 @@ public class MySQLCDCToOpenSearch {
 
                 // Configure checkpointing
                 Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
-                configuration.setString("execution.checkpointing.interval", "1 min");
+                configuration.setString("execution.checkpointing.interval", "5 min");
 
-                // Get configuration parameters from command-line args, environment variables, or placeholders
-                String mysqlHostname = getConfigParameter(
-                        applicationProperties, "mysql.hostname", "MYSQL_HOSTNAME", "<mysql-host>");
-                String mysqlPort = getConfigParameter(
-                        applicationProperties, "mysql.port", "MYSQL_PORT", "3306");
-                String mysqlUsername = getConfigParameter(
-                        applicationProperties, "mysql.username", "MYSQL_USERNAME", "<mysql-username>");
-                String mysqlPassword = getConfigParameter(
-                        applicationProperties, "mysql.password", "MYSQL_PASSWORD", "<mysql-password>");
-                String mysqlDatabase = getConfigParameter(
-                        applicationProperties, "mysql.database", "MYSQL_DATABASE", "<mysql-database>");
-                String mysqlTable = getConfigParameter(
-                        applicationProperties, "mysql.table", "MYSQL_TABLE", "<mysql-table>");
-                String mysqlServerTimezone = getConfigParameter(
-                        applicationProperties, "mysql.server-timezone", "MYSQL_SERVER_TIMEZONE", "UTC");
+                // Get MySQL configuration parameters (using underscore format for AWS Managed Flink)
+                String mysqlHostname = applicationProperties.get("mysql.hostname", "<mysql-host>");
+                String mysqlPort = applicationProperties.get("mysql.port", "3306");
+                String mysqlUsername = applicationProperties.get("mysql.username", "admin");
+                String mysqlPassword = applicationProperties.get("mysql.password", "<password>");
+                String mysqlDatabase = applicationProperties.get("mysql.database", "norrisdb");
+                String mysqlTable = applicationProperties.get("mysql.table", "user_order_list_20cols_new");
+                String mysqlServerTimezone = applicationProperties.get("mysql_server_timezone", "UTC");
 
-                String opensearchHost = getConfigParameter(
-                        applicationProperties, "opensearch.host", "OPENSEARCH_HOST", "<opensearch-host>");
-                String opensearchIndex = getConfigParameter(
-                        applicationProperties, "opensearch.index", "OPENSEARCH_INDEX", "<opensearch-index>");
-                String opensearchUsername = getConfigParameter(
-                        applicationProperties, "opensearch.username", "OPENSEARCH_USERNAME", "<opensearch-username>");
-                String opensearchPassword = getConfigParameter(
-                        applicationProperties, "opensearch.password", "OPENSEARCH_PASSWORD", "<opensearch-password>");
+                // Get OpenSearch configuration parameters (using underscore format for AWS Managed Flink)
+                String opensearchHost = applicationProperties.get("opensearch.host", 
+                        "https://<host>:443");
+                String opensearchIndex = applicationProperties.get("opensearch.index", "user_order_list_20cols_new");
+                String opensearchUsername = applicationProperties.get("opensearch.username", "admin");
+                String opensearchPassword = applicationProperties.get("opensearch.password", "ABCDEF");
 
                 LOG.info("MySQL Source Configuration - Host: {}, Port: {}, Database: {}, Table: {}", 
                          mysqlHostname, mysqlPort, mysqlDatabase, mysqlTable);
                 LOG.info("OpenSearch Sink Configuration - Host: {}, Index: {}", 
                          opensearchHost, opensearchIndex);
 
-                // Create MySQL CDC Source Table
+                // Create MySQL CDC Source Table with the specified schema
                 final String mysqlSourceDDL = String.format(
-                        "CREATE TABLE user_order_list (\n"
+                        "CREATE TABLE user_order_list_20cols_new (\n"
                                 + "  id INT,\n"
                                 + "  uuid STRING,\n"
                                 + "  user_name STRING,\n"
@@ -98,11 +100,26 @@ public class MySQLCDCToOpenSearch {
                                 + "  product_name STRING,\n"
                                 + "  product_type STRING,\n"
                                 + "  manufacturing_date INT,\n"
-                                + "  price FLOAT,\n"
+                                + "  price DECIMAL(6,2),\n"
                                 + "  unit INT,\n"
-                                + "  created_at TIMESTAMP(3),\n"
-                                + "  updated_at TIMESTAMP(3),\n"
-                                + "  test1 INT,\n"
+                                + "  email STRING,\n"
+                                + "  address STRING,\n"
+                                + "  city STRING,\n"
+                                + "  country STRING,\n"
+                                + "  ip_address STRING,\n"
+                                + "  website STRING,\n"
+                                + "  company_name STRING,\n"
+                                + "  department STRING,\n"
+                                + "  salary DECIMAL(8,2),\n"
+                                + "  age INT,\n"
+                                + "  gender STRING,\n"
+                                + "  status STRING,\n"
+                                + "  created_date TIMESTAMP,\n"
+                                + "  last_login TIMESTAMP,\n"
+                                + "  score INT,\n"
+                                + "  description STRING,\n"
+                                + "  created_at TIMESTAMP,\n"
+                                + "  updated_at TIMESTAMP,\n"
                                 + "  PRIMARY KEY (id) NOT ENFORCED\n"
                                 + ") WITH (\n"
                                 + "  'connector' = 'mysql-cdc',\n"
@@ -112,6 +129,12 @@ public class MySQLCDCToOpenSearch {
                                 + "  'password' = '%s',\n"
                                 + "  'database-name' = '%s',\n"
                                 + "  'table-name' = '%s',\n"
+                                + "  'scan.incremental.snapshot.enabled' = 'true',\n"
+                                + "  'scan.incremental.snapshot.chunk.size' = '500',\n"
+                                // + "  'scan.incremental.snapshot.unbounded-chunk-first.enabled' = 'true',\n"
+                                + "  'scan.snapshot.fetch.size' = '2000',\n"
+                                + "  'debezium.max.batch.size' = '1000',\n"
+                                + "  'debezium.max.queue.size' = '1000',\n"
                                 + "  'server-time-zone' = '%s'\n"
                                 + ");",
                         mysqlHostname, mysqlPort, mysqlUsername, mysqlPassword,
@@ -120,9 +143,9 @@ public class MySQLCDCToOpenSearch {
                 LOG.info("Creating MySQL CDC source table");
                 streamTableEnvironment.executeSql(mysqlSourceDDL);
 
-                // Create OpenSearch Sink Table using elasticsearch-7 connector for OpenSearch compatibility
+                // Create OpenSearch Sink Table with the specified schema
                 final String opensearchSinkDDL = String.format(
-                        "CREATE TABLE user_order_list_sink (\n"
+                        "CREATE TABLE user_order_list_20cols_new_sink (\n"
                                 + "  id INT,\n"
                                 + "  uuid STRING,\n"
                                 + "  user_name STRING,\n"
@@ -131,25 +154,40 @@ public class MySQLCDCToOpenSearch {
                                 + "  product_name STRING,\n"
                                 + "  product_type STRING,\n"
                                 + "  manufacturing_date INT,\n"
-                                + "  price FLOAT,\n"
+                                + "  price DECIMAL(6,2),\n"
                                 + "  unit INT,\n"
-                                + "  created_at TIMESTAMP(3),\n"
-                                + "  updated_at TIMESTAMP(3),\n"
-                                + "  test1 INT,\n"
+                                + "  email STRING,\n"
+                                + "  address STRING,\n"
+                                + "  city STRING,\n"
+                                + "  country STRING,\n"
+                                + "  ip_address STRING,\n"
+                                + "  website STRING,\n"
+                                + "  company_name STRING,\n"
+                                + "  department STRING,\n"
+                                + "  salary DECIMAL(8,2),\n"
+                                + "  age INT,\n"
+                                + "  gender STRING,\n"
+                                + "  status STRING,\n"
+                                + "  created_date TIMESTAMP,\n"
+                                + "  last_login TIMESTAMP,\n"
+                                + "  score INT,\n"
+                                + "  description STRING,\n"
+                                + "  created_at TIMESTAMP,\n"
+                                + "  updated_at TIMESTAMP,\n"
                                 + "  PRIMARY KEY (id) NOT ENFORCED\n"
                                 + ") WITH (\n"
-                                + "  'connector' = 'elasticsearch-7',\n"
+                                + "  'connector' = 'opensearch-2',\n"
                                 + "  'hosts' = '%s',\n"
                                 + "  'index' = '%s',\n"
                                 + "  'username' = '%s',\n"
                                 + "  'password' = '%s',\n"
                                 + "  'format' = 'json',\n"
                                 + "  'sink.bulk-flush.max-actions' = '1000',\n"
+                                + "  'sink.bulk-flush.interval' = '3s',\n"
                                 + "  'sink.bulk-flush.max-size' = '5mb',\n"
-                                + "  'sink.bulk-flush.interval' = '5s',\n"
                                 + "  'sink.bulk-flush.backoff.strategy' = 'EXPONENTIAL',\n"
-                                + "  'sink.bulk-flush.backoff.max-retries' = '3',\n"
-                                + "  'sink.bulk-flush.backoff.delay' = '1s'\n"
+                                + "  'sink.bulk-flush.backoff.max-retries' = '20',\n"
+                                + "  'sink.bulk-flush.backoff.delay' = '1000ms'\n"
                                 + ");",
                         opensearchHost, opensearchIndex, opensearchUsername, opensearchPassword);
 
@@ -159,7 +197,7 @@ public class MySQLCDCToOpenSearch {
                 // Execute data pipeline from MySQL CDC to OpenSearch
                 LOG.info("Starting data pipeline: MySQL CDC -> OpenSearch");
                 streamTableEnvironment.executeSql(
-                        "INSERT INTO user_order_list_sink SELECT * FROM user_order_list");
+                        "INSERT INTO user_order_list_20cols_new_sink SELECT * FROM user_order_list_20cols_new");
 
                 LOG.info("Pipeline job submitted successfully");
 

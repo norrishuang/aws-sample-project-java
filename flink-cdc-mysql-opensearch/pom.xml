@@ -16,9 +16,37 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <flink.version>1.20.0</flink.version>
-        <flink.cdc.version>3.2.1</flink.cdc.version>
+        <flink.version>1.19.1</flink.version>
+        <flink.cdc.version>3.5.0</flink.cdc.version>
+        <!-- Use OpenSearch 2.11.1 which is compatible with flink-connector-opensearch2:2.0.0-1.19 -->
+        <opensearch.version>2.11.1</opensearch.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Force OpenSearch 2.11.1 client libraries for compatibility with flink-connector-opensearch2:2.0.0-1.19 -->
+            <dependency>
+                <groupId>org.opensearch</groupId>
+                <artifactId>opensearch</artifactId>
+                <version>${opensearch.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.opensearch</groupId>
+                <artifactId>opensearch-core</artifactId>
+                <version>${opensearch.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.opensearch.client</groupId>
+                <artifactId>opensearch-rest-high-level-client</artifactId>
+                <version>${opensearch.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.opensearch.client</groupId>
+                <artifactId>opensearch-java</artifactId>
+                <version>2.6.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Flink CDC MySQL Connector -->
@@ -28,11 +56,50 @@
             <version>${flink.cdc.version}</version>
         </dependency>
 
-        <!-- OpenSearch Connector - using elasticsearch-7 for OpenSearch compatibility -->
+        <!-- Apache Flink OpenSearch Connector (Official) -->
         <dependency>
             <groupId>org.apache.flink</groupId>
-            <artifactId>flink-sql-connector-elasticsearch7</artifactId>
-            <version>3.0.1-1.17</version>
+            <artifactId>flink-connector-opensearch2</artifactId>
+            <version>2.0.0-1.19</version>
+        </dependency>
+
+        <!-- OpenSearch Core Dependencies (2.11.1 for compatibility with flink-connector-opensearch2:2.0.0-1.19) -->
+        <dependency>
+            <groupId>org.opensearch</groupId>
+            <artifactId>opensearch</artifactId>
+            <version>${opensearch.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.opensearch</groupId>
+            <artifactId>opensearch-core</artifactId>
+            <version>${opensearch.version}</version>
+        </dependency>
+
+        <!-- AWS Kinesis Analytics Runtime for KDA support -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-kinesisanalytics-runtime</artifactId>
+            <version>1.2.0</version>
+        </dependency>
+
+        <!-- OpenSearch Java Client 2.6.0 for enhanced compatibility -->
+        <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-rest-client</artifactId>
+            <version>${opensearch.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-java</artifactId>
+            <version>2.6.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.opensearch.client</groupId>
+            <artifactId>opensearch-rest-high-level-client</artifactId>
+            <version>${opensearch.version}</version>
         </dependency>
 
         <!-- Flink Core Dependencies -->

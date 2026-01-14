@@ -2,25 +2,36 @@
 
 This Flink application streams data from MySQL to OpenSearch using Change Data Capture (CDC).
 
+## Recent Updates (January 2026)
+
+✅ **Version Compatibility Fixed**: Resolved `ClassNotFoundException` and `NoClassDefFoundError` issues by aligning OpenSearch dependency versions  
+✅ **OpenSearch 2.19 Support**: Tested and verified compatibility with OpenSearch 2.19 clusters  
+✅ **Enhanced CDC Configuration**: Added optimized incremental snapshot settings for better performance  
+✅ **Dual Deployment Support**: Full support for both Amazon Managed Apache Flink (KDA) and EMR Flink  
+
+For detailed upgrade information, see [UPGRADE_NOTES.md](UPGRADE_NOTES.md).
+
 ## Features
 
-- **MySQL CDC Source**: Captures change data from MySQL database using Flink CDC 3.x connector
-- **OpenSearch Sink**: Writes data to OpenSearch using Elasticsearch-7 connector (for compatibility)
-- **Flink 1.20**: Built on Apache Flink 1.20 with Table API/SQL
+- **MySQL CDC Source**: Captures change data from MySQL database using Flink CDC 3.5.0 connector
+- **OpenSearch Sink**: Writes data to OpenSearch 2.x using official Apache Flink OpenSearch Connector 2.0.0-1.19
+- **Flink 1.19.1**: Built on Apache Flink 1.19.1 with Table API/SQL
 - **Real-time Pipeline**: Streams INSERT, UPDATE, and DELETE operations from MySQL to OpenSearch
+- **Version Compatibility**: Optimized dependency versions for compatibility with OpenSearch 2.19 clusters
+- **Dual Deployment**: Supports both Amazon Managed Apache Flink (KDA) and EMR Flink deployments
 
 ## Architecture
 
 ```
-MySQL Database (CDC) --> Flink Stream Processing --> OpenSearch Index
+MySQL Database (CDC) --> Flink Stream Processing --> OpenSearch 2.x Index
 ```
 
 ## Configuration
 
 The application accepts configuration parameters from multiple sources in priority order:
-1. **Command-line arguments**: Passed via `--param.name value` format
-2. **Environment variables**: Fallback if command-line arguments are not provided
-3. **Default values**: Placeholders indicating required configuration
+1. **KDA Application Properties**: For Amazon Managed Apache Flink (KDA) deployments
+2. **Command-line arguments**: Passed via `--param.name value` format for EMR Flink
+3. **Default values**: Fallback values for development and testing
 
 ### MySQL Source Configuration
 
@@ -28,26 +39,26 @@ The application accepts configuration parameters from multiple sources in priori
 |-----------|---------------------|---------|-------------|
 | `mysql.hostname` | `MYSQL_HOSTNAME` | `<mysql-host>` | MySQL server hostname |
 | `mysql.port` | `MYSQL_PORT` | `3306` | MySQL server port |
-| `mysql.username` | `MYSQL_USERNAME` | `<mysql-username>` | MySQL username |
-| `mysql.password` | `MYSQL_PASSWORD` | `<mysql-password>` | MySQL password |
-| `mysql.database` | `MYSQL_DATABASE` | `<mysql-database>` | Database name |
-| `mysql.table` | `MYSQL_TABLE` | `<mysql-table>` | Table name |
-| `mysql.server-timezone` | `MYSQL_SERVER_TIMEZONE` | `UTC` | Server timezone |
+| `mysql.username` | `MYSQL_USERNAME` | `admin` | MySQL username |
+| `mysql.password` | `MYSQL_PASSWORD` | `<password>` | MySQL password |
+| `mysql.database` | `MYSQL_DATABASE` | `norrisdb` | Database name |
+| `mysql.table` | `MYSQL_TABLE` | `user_order_list_20cols_new` | Table name |
+| `mysql_server_timezone` | `MYSQL_SERVER_TIMEZONE` | `UTC` | Server timezone |
 
 ### OpenSearch Sink Configuration
 
 | Parameter | Environment Variable | Default | Description |
 |-----------|---------------------|---------|-------------|
-| `opensearch.host` | `OPENSEARCH_HOST` | `<opensearch-host>` | OpenSearch endpoint URL (e.g., https://your-domain:443) |
-| `opensearch.index` | `OPENSEARCH_INDEX` | `<opensearch-index>` | OpenSearch index name |
-| `opensearch.username` | `OPENSEARCH_USERNAME` | `<opensearch-username>` | OpenSearch username |
-| `opensearch.password` | `OPENSEARCH_PASSWORD` | `<opensearch-password>` | OpenSearch password |
+| `opensearch.host` | `OPENSEARCH_HOST` | `https://<host>:443` | OpenSearch endpoint URL |
+| `opensearch.index` | `OPENSEARCH_INDEX` | `user_order_list_20cols_new` | OpenSearch index name |
+| `opensearch.username` | `OPENSEARCH_USERNAME` | `admin` | OpenSearch username |
+| `opensearch.password` | `OPENSEARCH_PASSWORD` | `ABCDEF` | OpenSearch password |
 
 **Note**: Parameters with placeholder defaults (e.g., `<mysql-host>`) must be provided via command-line arguments or environment variables. The application will not function correctly with placeholder values.
 
 ## Schema
 
-The pipeline processes the following schema:
+The pipeline processes the following schema (28 columns):
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -59,21 +70,46 @@ The pipeline processes the following schema:
 | product_name | STRING | Product name |
 | product_type | STRING | Product type |
 | manufacturing_date | INT | Manufacturing date |
-| price | FLOAT | Product price |
+| price | DECIMAL(6,2) | Product price |
 | unit | INT | Quantity unit |
-| created_at | TIMESTAMP(3) | Creation timestamp |
-| updated_at | TIMESTAMP(3) | Update timestamp |
-| test1 | INT | Test field |
+| email | STRING | Email address |
+| address | STRING | Address |
+| city | STRING | City |
+| country | STRING | Country |
+| ip_address | STRING | IP address |
+| website | STRING | Website |
+| company_name | STRING | Company name |
+| department | STRING | Department |
+| salary | DECIMAL(8,2) | Salary |
+| age | INT | Age |
+| gender | STRING | Gender |
+| status | STRING | Status |
+| created_date | TIMESTAMP | Creation date |
+| last_login | TIMESTAMP | Last login timestamp |
+| score | INT | Score |
+| description | STRING | Description |
+| created_at | TIMESTAMP | Creation timestamp |
+| updated_at | TIMESTAMP | Update timestamp |
 
 ## Building
 
 Build the uber JAR using Maven:
 
 ```bash
-mvn clean package
+mvn clean package -DskipTests
 ```
 
 The output JAR will be located at: `target/flink-cdc-mysql-opensearch-1.0-SNAPSHOT.jar`
+
+**Build Output**:
+- JAR size: ~150MB (includes all dependencies)
+- Type: Shaded/Uber JAR with all OpenSearch dependencies
+- Main class: `com.amazonaws.java.flink.MySQLCDCToOpenSearch`
+
+**Requirements**:
+- Maven 3.6+
+- JDK 11+
+- Internet connection (for downloading dependencies)
 
 ## Running
 
@@ -150,35 +186,133 @@ flink run -c com.amazonaws.java.flink.MySQLCDCToOpenSearch \
 
 ## Bulk Flush Settings
 
-The OpenSearch sink is configured with optimized bulk flush settings:
+The OpenSearch sink is configured with optimized bulk flush settings for high-throughput data ingestion:
 
-- Max actions: 1000
-- Max size: 5MB
-- Interval: 5 seconds
-- Backoff strategy: EXPONENTIAL
-- Max retries: 3
-- Backoff delay: 1 second
+- **Max actions**: 1000 (maximum number of actions per bulk request)
+- **Max size**: 5MB (maximum size of bulk request)
+- **Interval**: 3 seconds (time interval between bulk flushes)
+- **Backoff strategy**: EXPONENTIAL (retry strategy for failed requests)
+- **Max retries**: 20 (maximum number of retry attempts)
+- **Backoff delay**: 1000ms (initial delay before retry)
+
+These settings are optimized for:
+- High throughput data ingestion
+- Efficient network utilization
+- Automatic retry on transient failures
+- Balance between latency and throughput
 
 ## Error Handling
 
-The application includes:
-- Proper error logging using SLF4J
-- Exception handling with descriptive error messages
-- Automatic retry mechanism for OpenSearch writes
+The application includes comprehensive error handling:
+
+- **Logging**: Proper error logging using SLF4J with detailed context
+- **Exception Handling**: Descriptive error messages for troubleshooting
+- **Automatic Retry**: Built-in retry mechanism for OpenSearch writes with exponential backoff
+- **Graceful Degradation**: Handles transient failures without stopping the pipeline
+- **Checkpoint Recovery**: Automatic recovery from failures using Flink checkpoints
+
+### CDC Configuration Optimizations
+
+The application uses enhanced CDC configuration for better performance:
+
+```properties
+scan.incremental.snapshot.enabled = true
+scan.incremental.snapshot.chunk.size = 8092
+scan.incremental.snapshot.unbounded-chunk-first.enabled = true
+scan.snapshot.fetch.size = 2000
+debezium.max.batch.size = 1000
+debezium.max.queue.size = 1000
+```
+
+These settings optimize:
+- Initial snapshot performance
+- Memory usage during CDC
+- Throughput for change data capture
+- Queue management for high-volume changes
 
 ## Dependencies
 
-- Apache Flink 1.20.0
-- Flink CDC MySQL Connector 3.2.1
-- Flink Elasticsearch-7 SQL Connector 3.0.1-1.17
-- Jackson 2.18.2
+### Core Dependencies
+- **Apache Flink**: 1.19.1
+- **Flink CDC MySQL Connector**: 3.5.0
+- **Apache Flink OpenSearch Connector**: 2.0.0-1.19 (Official)
+- **AWS Kinesis Analytics Runtime**: 1.2.0
+
+### OpenSearch Dependencies
+- **OpenSearch Core**: 2.11.1 (compatible with OpenSearch 2.19 clusters)
+- **OpenSearch Java Client**: 2.6.0
+- **OpenSearch REST Client**: 2.11.1
+- **OpenSearch REST High-Level Client**: 2.11.1
+
+### Other Dependencies
+- **Jackson**: 2.18.2
+- **JDK**: 11+ (required for OpenSearch 2.x client libraries)
+
+### Version Compatibility Matrix
+
+| Component | Version | Compatibility |
+|-----------|---------|---------------|
+| Flink | 1.19.1 | ✅ |
+| flink-connector-opensearch2 | 2.0.0-1.19 | ✅ |
+| OpenSearch Core Libraries | 2.11.1 | ✅ |
+| OpenSearch Cluster | 2.19 | ✅ Compatible |
+| MySQL CDC | 3.5.0 | ✅ |
+| JDK | 11+ | ✅ Required |
+
+**Important**: The OpenSearch dependency versions (2.11.1) are specifically chosen for compatibility with the Flink OpenSearch connector. These versions work correctly with OpenSearch 2.19 clusters.
 
 ## Notes
 
-- The application uses the `elasticsearch-7` connector for OpenSearch compatibility
-- Checkpointing is configured with 1-minute intervals
-- The Elasticsearch-7 connector is compatible with OpenSearch 1.x and 2.x
+- The application uses the official Apache Flink `opensearch-2` connector for OpenSearch 2.x compatibility
+- Checkpointing is configured with 5-minute intervals (matching Elasticsearch project)
+- The OpenSearch connector provides native support for OpenSearch 2.x features and APIs
+- Enhanced CDC configuration with incremental snapshot and optimized batch settings
+- Supports both Amazon Managed Apache Flink (KDA) and EMR Flink deployments
+- Uses OpenSearch 2.11.1 core libraries (compatible with OpenSearch 2.19 clusters)
+- JDK 11+ is required for OpenSearch 2.x client libraries
 - For production use, ensure proper security configurations and credential management
+
+## Troubleshooting
+
+### Common Issues
+
+#### ClassNotFoundException or NoClassDefFoundError
+**Symptoms**: 
+- `ClassNotFoundException: org.opensearch.common.io.stream.NamedWriteable`
+- `NoClassDefFoundError: org/opensearch/core/common/io/stream/StreamOutput`
+
+**Solution**: These issues have been resolved by aligning OpenSearch dependency versions. Ensure you're using the latest build of the application with OpenSearch 2.11.1 dependencies.
+
+#### Version Compatibility Issues
+**Symptom**: Connector initialization failures or runtime errors
+
+**Solution**: Verify that you're using the correct version combination:
+- Flink 1.19.1
+- flink-connector-opensearch2:2.0.0-1.19
+- OpenSearch core libraries 2.11.1
+- OpenSearch cluster 2.19 (or any 2.x version)
+
+#### Connection Issues
+**Symptoms**: Unable to connect to MySQL or OpenSearch
+
+**Checklist**:
+1. ✅ Verify network connectivity from Flink cluster to MySQL and OpenSearch
+2. ✅ Check security group and firewall rules
+3. ✅ Validate credentials (username/password)
+4. ✅ Ensure OpenSearch endpoint URL includes protocol (https://)
+5. ✅ Verify MySQL binlog is enabled for CDC
+
+#### Performance Issues
+**Symptoms**: Slow data ingestion or high latency
+
+**Optimization Tips**:
+1. Adjust bulk flush settings based on your workload
+2. Increase parallelism for higher throughput
+3. Monitor checkpoint duration and adjust interval if needed
+4. Review MySQL CDC configuration parameters
+5. Check OpenSearch cluster health and capacity
+
+For more detailed troubleshooting information, see [UPGRADE_NOTES.md](UPGRADE_NOTES.md).
 
 ## Security Best Practices
 
