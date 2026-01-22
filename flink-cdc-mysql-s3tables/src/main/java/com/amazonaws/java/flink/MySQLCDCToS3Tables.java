@@ -16,11 +16,11 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Flink CDC application for streaming data from MySQL to OpenSearch.
- * This application captures change data from MySQL using Flink CDC and sinks to OpenSearch.
+ * Flink CDC application for streaming data from MySQL to AWS S3 Tables (Iceberg with REST Catalog).
+ * This application captures change data from MySQL using Flink CDC and sinks to S3 Tables.
  */
-public class MySQLCDCToOpenSearch {
-    private static final Logger LOG = LoggerFactory.getLogger(MySQLCDCToOpenSearch.class);
+public class MySQLCDCToS3Tables {
+    private static final Logger LOG = LoggerFactory.getLogger(MySQLCDCToS3Tables.class);
 
     private static ParameterTool loadApplicationParameters(String[] args, StreamExecutionEnvironment env) throws IOException {
         if (env instanceof LocalStreamEnvironment) {
@@ -36,10 +36,10 @@ public class MySQLCDCToOpenSearch {
                     return ParameterTool.fromMap(map);
                 }
             } catch (Exception e) {
-                LOG.info("Unable to load from KDA runtime properties, trying command line args for EMR: " + e.getMessage());
+                LOG.info("Unable to load from KDA runtime properties, trying command line args: " + e.getMessage());
             }
             
-            // Fallback to command line arguments (for EMR Flink)
+            // Fallback to command line arguments
             return ParameterTool.fromArgs(args);
         }
     }
@@ -49,7 +49,7 @@ public class MySQLCDCToOpenSearch {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         final ParameterTool applicationProperties = loadApplicationParameters(args, env);
 
-        LOG.info("Starting MySQL CDC to OpenSearch pipeline");
+        LOG.info("Starting MySQL CDC to S3 Tables pipeline");
 
         // Process stream using SQL API
         CDCPipeline.createAndDeployJob(env, applicationProperties);
@@ -68,30 +68,52 @@ public class MySQLCDCToOpenSearch {
                 Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
                 configuration.setString("execution.checkpointing.interval", "5 min");
 
-                // Get MySQL configuration parameters (using underscore format for AWS Managed Flink)
+                // Get MySQL configuration parameters
                 String mysqlHostname = applicationProperties.get("mysql.hostname", "<mysql-host>");
                 String mysqlPort = applicationProperties.get("mysql.port", "3306");
                 String mysqlUsername = applicationProperties.get("mysql.username", "admin");
                 String mysqlPassword = applicationProperties.get("mysql.password", "<password>");
-                String mysqlDatabase = applicationProperties.get("mysql.database", "norrisdb");
-                String mysqlTable = applicationProperties.get("mysql.table", "user_order_list_20cols_new");
-                String mysqlServerTimezone = applicationProperties.get("mysql_server_timezone", "UTC");
+                String mysqlDatabase = applicationProperties.get("mysql.database", "testdb");
+                String mysqlTable = applicationProperties.get("mysql.table", "user_order_list");
+                String mysqlServerTimezone = applicationProperties.get("mysql.server.timezone", "UTC");
 
-                // Get OpenSearch configuration parameters (using underscore format for AWS Managed Flink)
-                String opensearchHost = applicationProperties.get("opensearch.host", 
-                        "https://<host>:443");
-                String opensearchIndex = applicationProperties.get("opensearch.index", "user_order_list_20cols_new");
-                String opensearchUsername = applicationProperties.get("opensearch.username", "admin");
-                String opensearchPassword = applicationProperties.get("opensearch.password", "ABCDEF");
+                // Get S3 Tables / Iceberg REST Catalog configuration
+                String restCatalogUri = applicationProperties.get("iceberg.rest.uri", 
+                        "https://s3tables.us-east-1.amazonaws.com/iceberg");
+                String warehouseArn = applicationProperties.get("iceberg.warehouse.arn", 
+                        "arn:aws:s3tables:us-east-1:123456789012:bucket/my-bucket");
+                String namespace = applicationProperties.get("iceberg.namespace", "my_namespace");
+                String tableName = applicationProperties.get("iceberg.table.name", "user_order_list_s3tables");
+                String awsRegion = applicationProperties.get("aws.region", "us-east-1");
 
                 LOG.info("MySQL Source Configuration - Host: {}, Port: {}, Database: {}, Table: {}", 
                          mysqlHostname, mysqlPort, mysqlDatabase, mysqlTable);
-                LOG.info("OpenSearch Sink Configuration - Host: {}, Index: {}", 
-                         opensearchHost, opensearchIndex);
+                LOG.info("S3 Tables Configuration - REST URI: {}, Warehouse ARN: {}, Namespace: {}, Table: {}", 
+                         restCatalogUri, warehouseArn, namespace, tableName);
 
-                // Create MySQL CDC Source Table with the specified schema
+                // Create Iceberg Catalog with REST Catalog for S3 Tables
+                // S3 Tables requires SigV4 authentication
+                // IMPORTANT: Must specify 'catalog-type' = 'rest' to use REST catalog
+                final String icebergCatalog = String.format(
+                        "CREATE CATALOG s3tables_catalog WITH (\n"
+                                + "  'type' = 'iceberg',\n"
+                                + "  'catalog-type' = 'rest',\n"
+                                + "  'uri' = '%s',\n"
+                                + "  'warehouse' = '%s',\n"
+                                + "  'io-impl' = 'org.apache.iceberg.aws.s3.S3FileIO',\n"
+                                + "  'rest.sigv4-enabled' = 'true',\n"
+                                + "  'rest.signing-name' = 's3tables',\n"
+                                + "  'rest.signing-region' = '%s',\n"
+                                + "  'client.region' = '%s'\n"
+                                + ");",
+                        restCatalogUri, warehouseArn, awsRegion, awsRegion);
+
+                LOG.info("Creating Iceberg catalog with REST endpoint");
+                streamTableEnvironment.executeSql(icebergCatalog);
+
+                // Create MySQL CDC Source Table
                 final String mysqlSourceDDL = String.format(
-                        "CREATE TABLE user_order_list_20cols_new (\n"
+                        "CREATE TABLE mysql_source (\n"
                                 + "  id INT,\n"
                                 + "  uuid STRING,\n"
                                 + "  user_name STRING,\n"
@@ -131,7 +153,6 @@ public class MySQLCDCToOpenSearch {
                                 + "  'table-name' = '%s',\n"
                                 + "  'scan.incremental.snapshot.enabled' = 'true',\n"
                                 + "  'scan.incremental.snapshot.chunk.size' = '8192',\n"
-                                // + "  'scan.incremental.snapshot.unbounded-chunk-first.enabled' = 'true',\n"
                                 + "  'scan.snapshot.fetch.size' = '2000',\n"
                                 + "  'debezium.max.batch.size' = '1000',\n"
                                 + "  'debezium.max.queue.size' = '1000',\n"
@@ -143,9 +164,9 @@ public class MySQLCDCToOpenSearch {
                 LOG.info("Creating MySQL CDC source table");
                 streamTableEnvironment.executeSql(mysqlSourceDDL);
 
-                // Create OpenSearch Sink Table with the specified schema
-                final String opensearchSinkDDL = String.format(
-                        "CREATE TABLE user_order_list_20cols_new_sink (\n"
+                // Create Iceberg Sink Table in S3 Tables
+                final String icebergSinkDDL = String.format(
+                        "CREATE TABLE IF NOT EXISTS s3tables_catalog.%s.%s (\n"
                                 + "  id INT,\n"
                                 + "  uuid STRING,\n"
                                 + "  user_name STRING,\n"
@@ -176,28 +197,22 @@ public class MySQLCDCToOpenSearch {
                                 + "  updated_at TIMESTAMP,\n"
                                 + "  PRIMARY KEY (id) NOT ENFORCED\n"
                                 + ") WITH (\n"
-                                + "  'connector' = 'opensearch-2',\n"
-                                + "  'hosts' = '%s',\n"
-                                + "  'index' = '%s',\n"
-                                + "  'username' = '%s',\n"
-                                + "  'password' = '%s',\n"
-                                + "  'format' = 'json',\n"
-                                + "  'sink.bulk-flush.max-actions' = '1000',\n"
-                                + "  'sink.bulk-flush.interval' = '3s',\n"
-                                + "  'sink.bulk-flush.max-size' = '5mb',\n"
-                                + "  'sink.bulk-flush.backoff.strategy' = 'EXPONENTIAL',\n"
-                                + "  'sink.bulk-flush.backoff.max-retries' = '20',\n"
-                                + "  'sink.bulk-flush.backoff.delay' = '1000ms'\n"
+                                + "  'type' = 'iceberg',\n"
+                                + "  'catalog-name' = 's3tables_catalog',\n"
+                                + "  'write.metadata.delete-after-commit.enabled' = 'true',\n"
+                                + "  'write.metadata.previous-versions-max' = '5',\n"
+                                + "  'format-version' = '2'\n"
                                 + ");",
-                        opensearchHost, opensearchIndex, opensearchUsername, opensearchPassword);
+                        namespace, tableName);
 
-                LOG.info("Creating OpenSearch sink table");
-                streamTableEnvironment.executeSql(opensearchSinkDDL);
+                LOG.info("Creating Iceberg sink table in S3 Tables");
+                streamTableEnvironment.executeSql(icebergSinkDDL);
 
-                // Execute data pipeline from MySQL CDC to OpenSearch
-                LOG.info("Starting data pipeline: MySQL CDC -> OpenSearch");
+                // Execute data pipeline from MySQL CDC to S3 Tables
+                LOG.info("Starting data pipeline: MySQL CDC -> S3 Tables (Iceberg)");
                 streamTableEnvironment.executeSql(
-                        "INSERT INTO user_order_list_20cols_new_sink SELECT * FROM user_order_list_20cols_new");
+                        String.format("INSERT INTO s3tables_catalog.%s.%s SELECT * FROM mysql_source",
+                                namespace, tableName));
 
                 LOG.info("Pipeline job submitted successfully");
 
