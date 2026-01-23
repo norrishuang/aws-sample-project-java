@@ -2,13 +2,6 @@
 
 这个项目实现了从 MySQL 数据库通过 Flink CDC 实时捕获变更数据，并写入到 AWS S3 Tables (使用 Iceberg REST Catalog)。
 
-## 📚 文档导航
-
-- **[快速开始](QUICKSTART.md)** - 5 分钟快速启动指南
-- **[依赖说明](DEPENDENCIES.md)** - 详细的依赖关系和 AWS SDK v2 必要性说明
-- **[S3 Tables 配置](S3TABLES_CONFIG.md)** - 详细的 S3 Tables REST Catalog 配置说明
-- **[生产部署](DEPLOYMENT.md)** - AWS Managed Flink 部署完整指南
-- **[配置示例](config-example.properties)** - 配置参数模板
 
 ## 📁 项目结构
 
@@ -18,11 +11,7 @@ flink-cdc-mysql-s3tables/
 │   └── MySQLCDCToS3Tables.java          # 主应用程序
 ├── pom.xml                               # Maven 依赖配置
 ├── README.md                             # 项目说明文档
-├── QUICKSTART.md                         # 快速开始指南
-├── S3TABLES_CONFIG.md                    # S3 Tables 配置详解
-├── DEPLOYMENT.md                         # AWS Managed Flink 部署指南
 ├── config-example.properties             # 配置参数示例
-├── run-local.sh                          # 本地运行脚本
 └── .gitignore                            # Git 忽略文件
 ```
 
