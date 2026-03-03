@@ -121,6 +121,13 @@
             <version>2.18.2</version>
         </dependency>
 
+        <!-- AWS Managed Flink (KDA) Runtime — for loading FlinkApplicationProperties -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-kinesisanalytics-runtime</artifactId>
+            <version>1.2.0</version>
+        </dependency>
+
         <!-- Flink Core (provided by runtime) -->
         <dependency>
             <groupId>org.apache.flink</groupId>

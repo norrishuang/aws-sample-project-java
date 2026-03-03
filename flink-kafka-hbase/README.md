@@ -47,17 +47,19 @@ create 'default:user_order', 'info', 'product'
 
 ## Parameters
 
+Parameters are loaded from **Amazon Managed Flink `FlinkApplicationProperties`** at runtime, with fallback to command-line arguments (for local/EMR).
+
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `kafka_bootstrap_servers` | Yes | — | Kafka bootstrap servers |
-| `topic` | No | `kafka_topic` | Kafka topic name |
-| `kafka_group_id` | No | `flink-kafka-hbase-group` | Consumer group ID |
-| `kafka_format` | No | `json` | Message format: `json` or `debezium-json` |
-| `kafka_startup_mode` | No | `earliest-offset` | Startup mode |
-| `hbase_table` | No | `default:user_order` | HBase table name |
-| `hbase_zookeeper_quorum` | Yes | — | ZooKeeper quorum (e.g., `zk1:2181,zk2:2181`) |
-| `hbase_zookeeper_znode` | No | `/hbase` | ZooKeeper znode parent |
-| `checkpoint_interval` | No | `1 min` | Checkpoint interval |
+| `kafka.bootstrap.servers` | Yes | `localhost:9092` | Kafka bootstrap servers |
+| `kafka.topic` | No | `kafka_topic` | Kafka topic name |
+| `kafka.group.id` | No | `flink-kafka-hbase-group` | Consumer group ID |
+| `kafka.format` | No | `json` | Message format: `json` or `debezium-json` |
+| `kafka.startup.mode` | No | `earliest-offset` | Startup mode |
+| `hbase.table` | No | `default:user_order` | HBase table name |
+| `hbase.zookeeper.quorum` | Yes | `localhost:2181` | ZooKeeper quorum (e.g., `zk1:2181,zk2:2181`) |
+| `hbase.zookeeper.znode` | No | `/hbase` | ZooKeeper znode parent |
+| `checkpoint.interval` | No | `1 min` | Checkpoint interval |
 
 ## Build
 
@@ -72,21 +74,20 @@ mvn clean package -DskipTests
 ```bash
 flink run -c com.amazonaws.java.flink.KafkaToHBase \
   target/flink-kafka-hbase-1.0-SNAPSHOT.jar \
-  --kafka_bootstrap_servers localhost:9092 \
-  --topic my_topic \
-  --hbase_zookeeper_quorum localhost:2181 \
-  --hbase_table default:user_order
+  --kafka.bootstrap.servers localhost:9092 \
+  --kafka.topic my_topic \
+  --hbase.zookeeper.quorum localhost:2181 \
+  --hbase.table default:user_order
 ```
 
-### Amazon EMR 7.2
+### Amazon Managed Service for Apache Flink
 
-```bash
-flink run -m yarn-cluster \
-  -c com.amazonaws.java.flink.KafkaToHBase \
-  flink-kafka-hbase-1.0-SNAPSHOT.jar \
-  --kafka_bootstrap_servers b-1.kafka.xxx.amazonaws.com:9092 \
-  --topic my_topic \
-  --hbase_zookeeper_quorum zk1:2181,zk2:2181,zk3:2181 \
-  --hbase_table default:user_order \
-  --kafka_format debezium-json
+Configure the following in `FlinkApplicationProperties`:
+
+```
+kafka.bootstrap.servers = b-1.kafka.xxx.amazonaws.com:9092
+kafka.topic = my_topic
+kafka.format = debezium-json
+hbase.zookeeper.quorum = zk1:2181,zk2:2181,zk3:2181
+hbase.table = default:user_order
 ```
