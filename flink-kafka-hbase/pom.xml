@@ -16,10 +16,13 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Flink 1.18.1 — matches Amazon EMR 7.2 -->
-        <flink.version>1.18.1</flink.version>
-        <flink.kafka.connector>3.2.0-1.18</flink.kafka.connector>
-        <flink.hbase.connector>4.0.0-1.18</flink.hbase.connector>
+        <!-- Flink 1.20.0 — Amazon Managed Service for Apache Flink -->
+        <flink.version>1.20.0</flink.version>
+        <!-- Kafka Connector 3.4.0 — compatible with Flink 1.20.x -->
+        <flink.kafka.connector>3.4.0-1.20</flink.kafka.connector>
+        <!-- HBase Connector 4.0.0-1.19 — latest available, compatible with Flink 1.20 -->
+        <!-- Note: No official 1.20 build yet; 4.0.0-1.19 works with Flink 1.20 -->
+        <flink.hbase.connector>4.0.0-1.19</flink.hbase.connector>
         <!-- HBase 2.4.17 — matches Amazon EMR 7.2 (2.4.17-amzn-6) -->
         <hbase.version>2.4.17</hbase.version>
         <hadoop.version>3.3.6</hadoop.version>
@@ -41,7 +44,7 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-sql-connector-kafka</artifactId>
-            <version>3.2.0-1.18</version>
+            <version>${flink.kafka.connector}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.fasterxml.jackson.core</groupId>

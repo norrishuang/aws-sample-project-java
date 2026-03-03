@@ -21,9 +21,9 @@ HBase (Amazon EMR 7.2)
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| Flink | 1.18.1 | Amazon EMR 7.2 |
-| Flink Kafka Connector | 3.2.0-1.18 | |
-| Flink HBase Connector | 4.0.0-1.18 | hbase-2.2 connector (supports HBase 2.2+) |
+| Flink | 1.20.0 | Amazon Managed Service for Apache Flink |
+| Flink Kafka Connector | 3.4.0-1.20 | Official 1.20 build |
+| Flink HBase Connector | 4.0.0-1.19 | Latest available, compatible with Flink 1.20 |
 | HBase | 2.4.17 | Amazon EMR 7.2 (2.4.17-amzn-6) |
 | Hadoop | 3.3.6 | Amazon EMR 7.2 |
 | Java | 11 | |
