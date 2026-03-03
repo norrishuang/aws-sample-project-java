@@ -91,6 +91,11 @@
                     <groupId>org.apache.logging.log4j</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <!-- Exclude old Hadoop deps from HBase; we provide our own 3.3.6 -->
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -100,6 +105,10 @@
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -150,7 +159,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Hadoop (for HBase connectivity) -->
+        <!-- Hadoop (for HBase connectivity) — must be consistent version -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
@@ -174,6 +183,21 @@
                 </exclusion>
                 <exclusion>
                     <groupId>org.apache.avro</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-auth</artifactId>
+            <version>${hadoop.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
