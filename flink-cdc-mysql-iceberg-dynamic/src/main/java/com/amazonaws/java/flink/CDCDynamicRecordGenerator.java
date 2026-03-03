@@ -13,6 +13,7 @@ import org.apache.flink.util.Collector;
 import org.apache.iceberg.DistributionMode;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.flink.sink.dynamic.DynamicRecord;
 import org.apache.iceberg.flink.sink.dynamic.DynamicRecordGenerator;
@@ -71,7 +72,9 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
     public CDCDynamicRecordGenerator(String namespace, String branch,
                                      boolean upsertEnabled, int writeParallelism) {
         this.namespace = namespace;
-        this.branch = branch;
+        // Iceberg's TableUpdater.findOrCreateBranch() rejects null branch names.
+        // Default to "main" (SnapshotRef.MAIN_BRANCH) when not explicitly specified.
+        this.branch = (branch != null) ? branch : SnapshotRef.MAIN_BRANCH;
         this.upsertEnabled = upsertEnabled;
         this.writeParallelism = writeParallelism;
     }
@@ -164,7 +167,7 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
         // Create DynamicRecord — the core output for Dynamic Sink
         DynamicRecord record = new DynamicRecord(
                 tableIdentifier,
-                branch,                       // Optional branch (null = main)
+                branch,                       // Branch name (defaults to "main" if not configured)
                 schema,                       // Schema (cached per table for performance)
                 rowData,                      // The actual data row
                 PartitionSpec.unpartitioned(), // Can be customized per table if needed
