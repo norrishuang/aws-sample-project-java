@@ -91,14 +91,23 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
     public void generate(String jsonString, Collector<DynamicRecord> out) throws Exception {
         JsonNode rootNode = objectMapper.readTree(jsonString);
 
+        // DEBUG: Log the first few characters of every incoming event and its top-level keys
+        if (LOG.isInfoEnabled()) {
+            String preview = jsonString.length() > 500 ? jsonString.substring(0, 500) + "..." : jsonString;
+            LOG.info("[DEBUG-CDC] Received event (len={}), top-level keys: {}, preview: {}",
+                    jsonString.length(), rootNode.fieldNames() != null ? iteratorToString(rootNode.fieldNames()) : "null", preview);
+        }
+
         // Skip non-data events (DDL, schema changes, heartbeats).
         // Data change events from Debezium always contain an "op" field.
         if (!rootNode.has("op")) {
-            LOG.debug("Skipping non-data event (DDL/schema change) — Dynamic Sink handles schema evolution");
+            LOG.info("[DEBUG-CDC] SKIPPED: no 'op' field found. Top-level keys: {}. This event is not a data change.",
+                    iteratorToString(rootNode.fieldNames()));
             return;
         }
 
         String op = rootNode.get("op").asText();
+        LOG.info("[DEBUG-CDC] op={}", op);
 
         // Get the data payload: "after" for insert/update/snapshot, "before" for delete
         JsonNode dataNode;
@@ -109,23 +118,32 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
         }
 
         if (dataNode == null || dataNode.isNull()) {
-            LOG.debug("No data found in CDC event (op={}), skipping", op);
+            LOG.info("[DEBUG-CDC] SKIPPED: dataNode is null for op={}. 'before' keys: {}, 'after' keys: {}",
+                    op,
+                    rootNode.has("before") ? (rootNode.get("before").isNull() ? "null-value" : "present") : "missing",
+                    rootNode.has("after") ? (rootNode.get("after").isNull() ? "null-value" : "present") : "missing");
             return;
         }
 
         // Extract source table name for dynamic routing
         String targetTableName = extractTargetTableName(rootNode);
         TableIdentifier tableIdentifier = TableIdentifier.of(namespace, targetTableName);
+        LOG.info("[DEBUG-CDC] Target table: {}, fields in data: {}", tableIdentifier, iteratorToString(dataNode.fieldNames()));
 
         // Build Iceberg schema from Debezium schema metadata (or infer from values as fallback)
         JsonNode schemaNode = rootNode.get("schema");
         Schema schema = buildSchema(targetTableName, dataNode, schemaNode, op);
+        LOG.info("[DEBUG-CDC] Schema built with {} columns for table {}", schema.columns().size(), targetTableName);
 
         // Convert JSON to Flink RowData with correct RowKind
         RowData rowData = convertToRowData(dataNode, schema, op);
         if (rowData == null) {
+            LOG.info("[DEBUG-CDC] SKIPPED: convertToRowData returned null for op={}, table={}", op, targetTableName);
             return;
         }
+
+        LOG.info("[DEBUG-CDC] Emitting DynamicRecord: table={}, op={}, schema_cols={}, rowKind={}",
+                tableIdentifier, op, schema.columns().size(), rowData.getRowKind());
 
         // Create DynamicRecord — the core output for Dynamic Sink
         DynamicRecord record = new DynamicRecord(
@@ -522,5 +540,18 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
                     type, e.getMessage());
             return StringData.fromString(node.asText());
         }
+    }
+
+    // ==================== Utilities ====================
+
+    private static String iteratorToString(java.util.Iterator<String> it) {
+        if (it == null) return "null";
+        StringBuilder sb = new StringBuilder("[");
+        while (it.hasNext()) {
+            if (sb.length() > 1) sb.append(", ");
+            sb.append(it.next());
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }
