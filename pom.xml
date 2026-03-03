@@ -19,6 +19,7 @@
         <module>flink-kds-ingest-s3-cloudfront-logs</module>
         <module>flink-cdc-mysql-opensearch</module>
         <module>flink-cdc-mysql-iceberg-dynamic</module>
+        <module>flink-kafka-hbase</module>
     </modules>
 
     <properties>

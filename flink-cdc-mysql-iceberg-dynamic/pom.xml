@@ -11,31 +11,16 @@
 
     <artifactId>flink-cdc-mysql-iceberg-dynamic</artifactId>
 
-    <repositories>
-        <repository>
-            <id>apache-snapshots</id>
-            <name>Apache Snapshot Repository</name>
-            <url>https://repository.apache.org/content/repositories/snapshots/</url>
-            <snapshots>
-                <enabled>true</enabled>
-                <updatePolicy>always</updatePolicy>
-            </snapshots>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-        </repository>
-    </repositories>
-
     <properties>
-        <target.java.version>17</target.java.version>
+        <target.java.version>11</target.java.version>
         <maven.compiler.source>${target.java.version}</maven.compiler.source>
         <maven.compiler.target>${target.java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flink.version>1.20.0</flink.version>
-        <flink.cdc.version>3.0.1</flink.cdc.version>
+        <flink.cdc.version>3.3.0</flink.cdc.version>
         <kda.runtime.version>1.2.0</kda.runtime.version>
-        <iceberg.version>1.11.0-SNAPSHOT</iceberg.version>
-        <hadoop.version>3.3.4</hadoop.version>
+        <iceberg.version>1.10.1</iceberg.version>
+        <hadoop.version>3.4.1</hadoop.version>
         <log4j.version>2.17.1</log4j.version>
     </properties>
 
@@ -49,9 +34,16 @@
 
         <!-- Flink CDC MySQL Connector -->
         <dependency>
-            <groupId>com.ververica</groupId>
+            <groupId>org.apache.flink</groupId>
             <artifactId>flink-sql-connector-mysql-cdc</artifactId>
             <version>${flink.cdc.version}</version>
+        </dependency>
+
+        <!-- MySQL JDBC Driver (required by Flink CDC 3.1+, no longer bundled) -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.0.33</version>
         </dependency>
 
         <!-- Flink Core dependencies -->
@@ -159,16 +151,16 @@
             <version>1.3.0</version>
         </dependency>
 
-        <!-- Parquet -->
+        <!-- Parquet: must align with Iceberg 1.10.1's transitive dependency (1.16.0) -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-hadoop</artifactId>
-            <version>1.13.1</version>
+            <version>1.16.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-avro</artifactId>
-            <version>1.13.1</version>
+            <version>1.16.0</version>
         </dependency>
 
         <!-- Hadoop -->
@@ -241,7 +233,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.4.1</version>
+                <version>3.6.0</version>
                 <executions>
                     <execution>
                         <phase>package</phase>

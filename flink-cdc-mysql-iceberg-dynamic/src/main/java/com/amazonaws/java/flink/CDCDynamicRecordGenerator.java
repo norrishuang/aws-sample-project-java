@@ -13,6 +13,7 @@ import org.apache.flink.util.Collector;
 import org.apache.iceberg.DistributionMode;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.flink.sink.dynamic.DynamicRecord;
 import org.apache.iceberg.flink.sink.dynamic.DynamicRecordGenerator;
@@ -71,7 +72,9 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
     public CDCDynamicRecordGenerator(String namespace, String branch,
                                      boolean upsertEnabled, int writeParallelism) {
         this.namespace = namespace;
-        this.branch = branch;
+        // Iceberg's TableUpdater.findOrCreateBranch() rejects null branch names.
+        // Default to "main" (SnapshotRef.MAIN_BRANCH) when not explicitly specified.
+        this.branch = (branch != null) ? branch : SnapshotRef.MAIN_BRANCH;
         this.upsertEnabled = upsertEnabled;
         this.writeParallelism = writeParallelism;
     }
@@ -91,46 +94,80 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
     public void generate(String jsonString, Collector<DynamicRecord> out) throws Exception {
         JsonNode rootNode = objectMapper.readTree(jsonString);
 
+        // DEBUG: Log the first few characters of every incoming event and its top-level keys
+        if (LOG.isInfoEnabled()) {
+            String preview = jsonString.length() > 500 ? jsonString.substring(0, 500) + "..." : jsonString;
+            LOG.info("[DEBUG-CDC] Received event (len={}), top-level keys: {}, preview: {}",
+                    jsonString.length(), rootNode.fieldNames() != null ? iteratorToString(rootNode.fieldNames()) : "null", preview);
+        }
+
+        // Detect Debezium envelope format vs unwrapped format.
+        // Full envelope: { "schema": {...}, "payload": { "op": ..., "before": ..., "after": ..., "source": ... } }
+        // Unwrapped:     { "op": ..., "before": ..., "after": ..., "source": ..., "schema": ... }
+        JsonNode eventNode;   // The node containing op, before, after, source
+        JsonNode schemaNode;  // The envelope-level schema (for type metadata)
+        if (rootNode.has("payload")) {
+            // Full Debezium envelope format — unwrap payload
+            eventNode = rootNode.get("payload");
+            schemaNode = rootNode.get("schema");
+            LOG.info("[DEBUG-CDC] Detected ENVELOPE format (schema+payload). Unwrapping payload.");
+        } else {
+            // Already unwrapped format — op/before/after at top level
+            eventNode = rootNode;
+            schemaNode = rootNode.get("schema");
+            LOG.info("[DEBUG-CDC] Detected UNWRAPPED format (op at top level).");
+        }
+
         // Skip non-data events (DDL, schema changes, heartbeats).
         // Data change events from Debezium always contain an "op" field.
-        if (!rootNode.has("op")) {
-            LOG.debug("Skipping non-data event (DDL/schema change) — Dynamic Sink handles schema evolution");
+        if (!eventNode.has("op")) {
+            LOG.info("[DEBUG-CDC] SKIPPED: no 'op' field found. Event keys: {}. This event is not a data change.",
+                    iteratorToString(eventNode.fieldNames()));
             return;
         }
 
-        String op = rootNode.get("op").asText();
+        String op = eventNode.get("op").asText();
+        LOG.info("[DEBUG-CDC] op={}", op);
 
         // Get the data payload: "after" for insert/update/snapshot, "before" for delete
         JsonNode dataNode;
         if ("d".equals(op)) {
-            dataNode = rootNode.get("before");
+            dataNode = eventNode.get("before");
         } else {
-            dataNode = rootNode.get("after");
+            dataNode = eventNode.get("after");
         }
 
         if (dataNode == null || dataNode.isNull()) {
-            LOG.debug("No data found in CDC event (op={}), skipping", op);
+            LOG.info("[DEBUG-CDC] SKIPPED: dataNode is null for op={}. 'before' keys: {}, 'after' keys: {}",
+                    op,
+                    eventNode.has("before") ? (eventNode.get("before").isNull() ? "null-value" : "present") : "missing",
+                    eventNode.has("after") ? (eventNode.get("after").isNull() ? "null-value" : "present") : "missing");
             return;
         }
 
         // Extract source table name for dynamic routing
-        String targetTableName = extractTargetTableName(rootNode);
+        String targetTableName = extractTargetTableName(eventNode);
         TableIdentifier tableIdentifier = TableIdentifier.of(namespace, targetTableName);
+        LOG.info("[DEBUG-CDC] Target table: {}, fields in data: {}", tableIdentifier, iteratorToString(dataNode.fieldNames()));
 
         // Build Iceberg schema from Debezium schema metadata (or infer from values as fallback)
-        JsonNode schemaNode = rootNode.get("schema");
         Schema schema = buildSchema(targetTableName, dataNode, schemaNode, op);
+        LOG.info("[DEBUG-CDC] Schema built with {} columns for table {}", schema.columns().size(), targetTableName);
 
         // Convert JSON to Flink RowData with correct RowKind
         RowData rowData = convertToRowData(dataNode, schema, op);
         if (rowData == null) {
+            LOG.info("[DEBUG-CDC] SKIPPED: convertToRowData returned null for op={}, table={}", op, targetTableName);
             return;
         }
+
+        LOG.info("[DEBUG-CDC] Emitting DynamicRecord: table={}, op={}, schema_cols={}, rowKind={}",
+                tableIdentifier, op, schema.columns().size(), rowData.getRowKind());
 
         // Create DynamicRecord — the core output for Dynamic Sink
         DynamicRecord record = new DynamicRecord(
                 tableIdentifier,
-                branch,                       // Optional branch (null = main)
+                branch,                       // Branch name (defaults to "main" if not configured)
                 schema,                       // Schema (cached per table for performance)
                 rowData,                      // The actual data row
                 PartitionSpec.unpartitioned(), // Can be customized per table if needed
@@ -522,5 +559,18 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
                     type, e.getMessage());
             return StringData.fromString(node.asText());
         }
+    }
+
+    // ==================== Utilities ====================
+
+    private static String iteratorToString(java.util.Iterator<String> it) {
+        if (it == null) return "null";
+        StringBuilder sb = new StringBuilder("[");
+        while (it.hasNext()) {
+            if (sb.length() > 1) sb.append(", ");
+            sb.append(it.next());
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }
