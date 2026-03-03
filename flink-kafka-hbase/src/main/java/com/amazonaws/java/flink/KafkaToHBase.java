@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
  * <h2>HBase Table Structure</h2>
  * <p>The HBase sink table uses the following column family mapping:</p>
  * <ul>
- *   <li>Row Key: {@code uuid} (STRING)</li>
+ *   <li>Row Key: {@code uuid_timestamp} (STRING) — composite key of uuid + '_' + epoch millis</li>
  *   <li>Column Family {@code info}: user_name, phone_number, ts</li>
  *   <li>Column Family {@code product}: product_id, product_name, product_type, manufacturing_date, price, unit</li>
  * </ul>
@@ -128,11 +128,11 @@ public class KafkaToHBase {
             // 2. Create HBase Sink Table
             // ============================================================
             // HBase table uses column families to organize data.
-            // The rowkey maps to the first column (uuid).
+            // The rowkey is a composite key: uuid + '_' + timestamp_millis (BIGINT as epoch ms).
             // Flink HBase connector requires ROW type for each column family.
             String createHBaseSink = String.format(
                     "CREATE TABLE hbase_sink (\n"
-                    + "  uuid STRING,\n"
+                    + "  rowkey STRING,\n"
                     + "  info ROW<user_name STRING, phone_number BIGINT, ts TIMESTAMP(3)>,\n"
                     + "  product ROW<product_id INT, product_name STRING, product_type STRING, "
                     + "manufacturing_date INT, price FLOAT, unit INT>\n"
@@ -150,12 +150,13 @@ public class KafkaToHBase {
             // ============================================================
             // 3. Execute INSERT: Kafka → HBase
             // ============================================================
-            // Map flat Kafka fields into HBase column family ROW structures.
-            // uuid becomes the HBase rowkey (first column in the HBase table definition).
+            // Build composite rowkey: uuid + '_' + epoch_millis from ts.
+            // CAST(ts AS BIGINT) converts TIMESTAMP(3) to epoch milliseconds.
+            // uuid becomes part of the rowkey for uniqueness, timestamp for time-based ordering.
             String insertSql =
                     "INSERT INTO hbase_sink\n"
                     + "SELECT\n"
-                    + "  uuid,\n"
+                    + "  uuid || '_' || CAST(CAST(ts AS BIGINT) AS STRING) AS rowkey,\n"
                     + "  ROW(user_name, phone_number, ts) AS info,\n"
                     + "  ROW(product_id, product_name, product_type, "
                     + "manufacturing_date, price, unit) AS product\n"

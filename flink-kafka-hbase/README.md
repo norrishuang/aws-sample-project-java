@@ -41,7 +41,7 @@ create 'default:user_order', 'info', 'product'
 
 | HBase | Column Family | Columns |
 |-------|--------------|---------|
-| Row Key | — | `uuid` |
+| Row Key | — | `uuid_timestamp` (composite: uuid + '_' + epoch millis) |
 | `info` | user info | `user_name`, `phone_number`, `ts` |
 | `product` | product info | `product_id`, `product_name`, `product_type`, `manufacturing_date`, `price`, `unit` |
 
