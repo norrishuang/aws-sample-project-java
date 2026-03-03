@@ -11,6 +11,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.iceberg.flink.CatalogLoader;
 import org.apache.iceberg.flink.sink.dynamic.DynamicIcebergSink;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.flink.streaming.api.CheckpointingMode;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,8 +87,42 @@ public class MySQLCDCToIcebergDynamic {
         // ============================================================
         // 1. Checkpointing — required for Iceberg exactly-once semantics
         // ============================================================
+        // IMPORTANT: When using Glue Catalog, the Dynamic Sink's DynamicRecordProcessor
+        // calls Glue API (createTable/getTable) synchronously in the data processing thread.
+        // If a checkpoint barrier arrives while a Glue API call is in flight, Flink may
+        // interrupt the thread, causing AWS SDK's AbortedException (WARN level).
+        //
+        // Mitigation strategy:
+        //   1. Use a longer checkpoint interval (default 5min) to reduce interrupt frequency
+        //   2. Set checkpoint timeout to allow Glue operations to complete
+        //   3. Use UNALIGNED checkpoints to avoid blocking on barriers
+        //   4. Configure Glue client timeouts via catalog properties (see below)
         long checkpointInterval = params.getLong("checkpoint.interval", 300_000L); // 5 min default
         env.enableCheckpointing(checkpointInterval);
+
+        CheckpointConfig cpConfig = env.getCheckpointConfig();
+        // Allow checkpoints to take up to 10 minutes before timing out
+        cpConfig.setCheckpointTimeout(params.getLong("checkpoint.timeout", 600_000L));
+        // Tolerate up to 3 consecutive checkpoint failures before failing the job
+        cpConfig.setTolerableCheckpointFailureNumber(
+                params.getInt("checkpoint.tolerable.failures", 3));
+        // Minimum pause between checkpoints — prevents checkpoint storms
+        cpConfig.setMinPauseBetweenCheckpoints(
+                params.getLong("checkpoint.min.pause", 60_000L));
+        // Use EXACTLY_ONCE for Iceberg consistency
+        cpConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+        // Enable unaligned checkpoints to reduce barrier wait time,
+        // which decreases the chance of interrupting Glue API calls
+        if (params.getBoolean("checkpoint.unaligned", false)) {
+            cpConfig.enableUnalignedCheckpoints();
+            LOG.info("Unaligned checkpoints enabled");
+        }
+
+        LOG.info("Checkpoint config — interval: {}ms, timeout: {}ms, tolerableFailures: {}, minPause: {}ms",
+                checkpointInterval,
+                cpConfig.getCheckpointTimeout(),
+                cpConfig.getTolerableCheckpointFailureNumber(),
+                cpConfig.getMinPauseBetweenCheckpoints());
 
         // ============================================================
         // 2. MySQL CDC Source configuration
@@ -259,6 +295,21 @@ public class MySQLCDCToIcebergDynamic {
                 if (glueEndpoint != null && !glueEndpoint.isEmpty()) {
                     props.put("glue.endpoint", glueEndpoint);
                 }
+                // Glue HTTP client timeout configuration.
+                // Shorter timeouts ensure Glue API calls complete (or fail fast) before
+                // a checkpoint barrier interrupts the thread.
+                // API call timeout: total time for a single API call including retries (default 60s → 30s)
+                props.put("client.api-call-timeout-ms",
+                        params.get("glue.api.call.timeout.ms", "30000"));
+                // API call attempt timeout: timeout for a single HTTP attempt (default ~30s → 10s)
+                props.put("client.api-call-attempt-timeout-ms",
+                        params.get("glue.api.call.attempt.timeout.ms", "10000"));
+                // Connection timeout (default 2s, good as is)
+                props.put("client.connect-timeout-ms",
+                        params.get("glue.connect.timeout.ms", "2000"));
+                // Socket timeout (default 30s → 10s for faster failure)
+                props.put("client.socket-timeout-ms",
+                        params.get("glue.socket.timeout.ms", "10000"));
                 break;
         }
 
