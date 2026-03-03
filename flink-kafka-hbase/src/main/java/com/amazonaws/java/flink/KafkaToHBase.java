@@ -185,10 +185,12 @@ public class KafkaToHBase {
                 // 3. Execute INSERT: Kafka → HBase
                 // ============================================================
                 // Build composite rowkey: uuid + '_' + epoch_millis from ts.
+                // Flink 1.20 disallows CAST(TIMESTAMP AS BIGINT), use UNIX_TIMESTAMP instead.
+                // UNIX_TIMESTAMP returns seconds, multiply by 1000 for millisecond precision.
                 String insertSql =
                         "INSERT INTO hbase_sink\n"
                         + "SELECT\n"
-                        + "  uuid || '_' || CAST(CAST(ts AS BIGINT) AS STRING) AS rowkey,\n"
+                        + "  uuid || '_' || CAST(UNIX_TIMESTAMP(CAST(ts AS STRING)) * 1000 AS STRING) AS rowkey,\n"
                         + "  ROW(user_name, phone_number, ts) AS info,\n"
                         + "  ROW(product_id, product_name, product_type, "
                         + "manufacturing_date, price, unit) AS product\n"
