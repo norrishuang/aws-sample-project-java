@@ -1,8 +1,8 @@
 package com.amazonaws.java.flink;
 
 import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
-import com.ververica.cdc.connectors.mysql.source.MySqlSource;
-import com.ververica.cdc.debezium.JsonDebeziumDeserializationSchema;
+import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
+import org.apache.flink.cdc.debezium.JsonDebeziumDeserializationSchema;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -129,7 +129,7 @@ public class MySQLCDCToIcebergDynamic {
                 .password(mysqlPassword)
                 .serverTimeZone(serverTimezone)
                 .deserializer(new JsonDebeziumDeserializationSchema(true))
-                .includeSchemaChanges(true)
+                .includeSchemaChanges(false)
                 .scanNewlyAddedTableEnabled(true)
                 .build();
 
