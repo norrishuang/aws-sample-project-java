@@ -16,10 +16,13 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Flink 1.18.1 — matches Amazon EMR 7.2 -->
-        <flink.version>1.18.1</flink.version>
-        <flink.kafka.connector>3.2.0-1.18</flink.kafka.connector>
-        <flink.hbase.connector>4.0.0-1.18</flink.hbase.connector>
+        <!-- Flink 1.20.0 — Amazon Managed Service for Apache Flink -->
+        <flink.version>1.20.0</flink.version>
+        <!-- Kafka Connector 3.4.0 — compatible with Flink 1.20.x -->
+        <flink.kafka.connector>3.4.0-1.20</flink.kafka.connector>
+        <!-- HBase Connector 4.0.0-1.19 — latest available, compatible with Flink 1.20 -->
+        <!-- Note: No official 1.20 build yet; 4.0.0-1.19 works with Flink 1.20 -->
+        <flink.hbase.connector>4.0.0-1.19</flink.hbase.connector>
         <!-- HBase 2.4.17 — matches Amazon EMR 7.2 (2.4.17-amzn-6) -->
         <hbase.version>2.4.17</hbase.version>
         <hadoop.version>3.3.6</hadoop.version>
@@ -41,7 +44,7 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-sql-connector-kafka</artifactId>
-            <version>3.2.0-1.18</version>
+            <version>${flink.kafka.connector}</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.fasterxml.jackson.core</groupId>
@@ -50,7 +53,7 @@
             </exclusions>
         </dependency>
 
-        <!-- Flink HBase Connector (supports HBase 2.2+) -->
+        <!-- Flink HBase Connector (thin jar, excludes bundled HBase) -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-hbase-2.2</artifactId>
@@ -62,17 +65,13 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-sql-connector-hbase-2.2</artifactId>
-            <version>${flink.hbase.connector}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.hbase</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+        <!--
+            NOTE: Do NOT use flink-sql-connector-hbase-2.2 here.
+            It is an uber jar that bundles HBase 2.2.3's hbase-default.xml,
+            which conflicts with our HBase 2.4.17 and causes:
+            "hbase-default.xml file seems to be for an older version of HBase (2.2.3)"
+            Instead, we use flink-connector-hbase-2.2 (thin) + explicit HBase 2.4.17 client.
+        -->
 
         <!-- HBase Client — version aligned with EMR 7.2 (2.4.17) -->
         <dependency>
@@ -92,6 +91,11 @@
                     <groupId>org.apache.logging.log4j</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <!-- Exclude old Hadoop deps from HBase; we provide our own 3.3.6 -->
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -101,6 +105,10 @@
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
@@ -116,6 +124,13 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.18.2</version>
+        </dependency>
+
+        <!-- AWS Managed Flink (KDA) Runtime — for loading FlinkApplicationProperties -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-kinesisanalytics-runtime</artifactId>
+            <version>1.2.0</version>
         </dependency>
 
         <!-- Flink Core (provided by runtime) -->
@@ -144,7 +159,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Hadoop (for HBase connectivity) -->
+        <!-- Hadoop (for HBase connectivity) — must be consistent version -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
@@ -168,6 +183,21 @@
                 </exclusion>
                 <exclusion>
                     <groupId>org.apache.avro</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-auth</artifactId>
+            <version>${hadoop.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
