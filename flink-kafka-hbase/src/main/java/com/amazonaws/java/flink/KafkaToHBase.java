@@ -46,7 +46,7 @@ import java.util.Properties;
  * </ul>
  *
  * <h2>HBase Table Structure</h2>
- * <p>Row Key: {@code uuid_timestamp} (composite: uuid + '_' + epoch millis)</p>
+ * <p>Row Key: {@code uuid_timestamp} (composite: uuid + '_' + epoch millis from CURRENT_TIMESTAMP)</p>
  * <ul>
  *   <li>Column Family {@code info}: user_name, phone_number, ts</li>
  *   <li>Column Family {@code product}: product_id, product_name, product_type, manufacturing_date, price, unit</li>
@@ -220,13 +220,14 @@ public class KafkaToHBase {
                 // ============================================================
                 // 3. Execute INSERT: Kafka → HBase
                 // ============================================================
-                // RowKey: uuid (unique per record)
+                // RowKey: uuid + '_' + millisecond timestamp
+                // Example: "550e8400-e29b-41d4-a716-446655440000_1709528400123"
                 // WHERE uuid IS NOT NULL: skip records that failed JSON parsing
                 // (old-format records in the topic produce all-null rows)
                 String insertSql =
                         "INSERT INTO hbase_sink\n"
                         + "SELECT\n"
-                        + "  uuid AS rowkey,\n"
+                        + "  uuid || '_' || CAST(UNIX_TIMESTAMP() * 1000 AS STRING) AS rowkey,\n"
                         + "  ROW(user_name, phone_number, email, address, city, country, "
                         + "ip_address, website, age, gender, "
                         + "created_date, last_login, score) AS info,\n"
