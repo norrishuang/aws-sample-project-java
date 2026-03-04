@@ -133,17 +133,37 @@ public class KafkaToHBase {
                 // ============================================================
                 // 1. Create Kafka Source Table
                 // ============================================================
-                // Schema matches Kafka message format:
-                // {"customerId":3118918651,"transactionAmount":266060,
-                //  "sourceIp":"123.160.106.5","status":"SUCCESS",
-                //  "transactionTime":"2026-03-04 00:08:31.508426"}
+                // Schema: 30 fields from datafaker-generated Kafka messages
                 String createKafkaSource = String.format(
                         "CREATE TABLE kafka_source (\n"
+                        + "  uuid STRING,\n"
                         + "  customerId BIGINT,\n"
                         + "  transactionAmount BIGINT,\n"
                         + "  sourceIp STRING,\n"
-                        + "  status STRING,\n"
-                        + "  transactionTime STRING\n"
+                        + "  `status` STRING,\n"
+                        + "  transactionTime STRING,\n"
+                        + "  user_name STRING,\n"
+                        + "  phone_number INT,\n"
+                        + "  product_id INT,\n"
+                        + "  product_name STRING,\n"
+                        + "  product_type STRING,\n"
+                        + "  manufacturing_date INT,\n"
+                        + "  price DECIMAL(6,2),\n"
+                        + "  unit INT,\n"
+                        + "  email STRING,\n"
+                        + "  address STRING,\n"
+                        + "  city STRING,\n"
+                        + "  country STRING,\n"
+                        + "  ip_address STRING,\n"
+                        + "  website STRING,\n"
+                        + "  company_name STRING,\n"
+                        + "  department STRING,\n"
+                        + "  salary DECIMAL(8,2),\n"
+                        + "  age INT,\n"
+                        + "  gender STRING,\n"
+                        + "  created_date STRING,\n"
+                        + "  last_login STRING,\n"
+                        + "  score INT\n"
                         + ") WITH (\n"
                         + "  'connector' = 'kafka',\n"
                         + "  'topic' = '%s',\n"
@@ -161,14 +181,24 @@ public class KafkaToHBase {
                 // ============================================================
                 // 2. Create HBase Sink Table
                 // ============================================================
-                // RowKey: customerId + '_' + transactionTime (sortable string)
-                // Column Family 'info': transaction details
-                // Flink HBase connector requires ROW type for each column family.
+                // RowKey: uuid (globally unique per record)
+                // Column families organized by business domain:
+                //   info        — user profile
+                //   transaction — payment/transaction details
+                //   product     — product details
+                //   work        — employment info
                 String createHBaseSink = String.format(
                         "CREATE TABLE hbase_sink (\n"
                         + "  rowkey STRING,\n"
-                        + "  info ROW<transactionAmount BIGINT, sourceIp STRING, "
-                        + "status STRING, transactionTime STRING>\n"
+                        + "  info ROW<user_name STRING, phone_number INT, email STRING, "
+                        + "address STRING, city STRING, country STRING, ip_address STRING, "
+                        + "website STRING, age INT, gender STRING, "
+                        + "created_date STRING, last_login STRING, score INT>,\n"
+                        + "  transaction ROW<customerId BIGINT, transactionAmount BIGINT, "
+                        + "sourceIp STRING, `status` STRING, transactionTime STRING>,\n"
+                        + "  product ROW<product_id INT, product_name STRING, product_type STRING, "
+                        + "manufacturing_date INT, price DECIMAL(6,2), unit INT>,\n"
+                        + "  work ROW<company_name STRING, department STRING, salary DECIMAL(8,2)>\n"
                         + ") WITH (\n"
                         + "  'connector' = 'hbase-2.2',\n"
                         + "  'table-name' = '%s',\n"
@@ -183,12 +213,18 @@ public class KafkaToHBase {
                 // ============================================================
                 // 3. Execute INSERT: Kafka → HBase
                 // ============================================================
-                // RowKey: customerId + '_' + transactionTime (replace special chars for clean key)
+                // RowKey: uuid (unique per record)
                 String insertSql =
                         "INSERT INTO hbase_sink\n"
                         + "SELECT\n"
-                        + "  CAST(customerId AS STRING) || '_' || REPLACE(REPLACE(transactionTime, ' ', '_'), ':', '') AS rowkey,\n"
-                        + "  ROW(transactionAmount, sourceIp, status, transactionTime) AS info\n"
+                        + "  uuid AS rowkey,\n"
+                        + "  ROW(user_name, phone_number, email, address, city, country, "
+                        + "ip_address, website, age, gender, "
+                        + "created_date, last_login, score) AS info,\n"
+                        + "  ROW(customerId, transactionAmount, sourceIp, `status`, transactionTime) AS transaction,\n"
+                        + "  ROW(product_id, product_name, product_type, "
+                        + "manufacturing_date, price, unit) AS product,\n"
+                        + "  ROW(company_name, department, salary) AS work\n"
                         + "FROM kafka_source";
 
                 LOG.info("Starting INSERT pipeline: Kafka -> HBase");
