@@ -221,6 +221,8 @@ public class KafkaToHBase {
                 // 3. Execute INSERT: Kafka → HBase
                 // ============================================================
                 // RowKey: uuid (unique per record)
+                // WHERE uuid IS NOT NULL: skip records that failed JSON parsing
+                // (old-format records in the topic produce all-null rows)
                 String insertSql =
                         "INSERT INTO hbase_sink\n"
                         + "SELECT\n"
@@ -232,7 +234,8 @@ public class KafkaToHBase {
                         + "  ROW(product_id, product_name, product_type, "
                         + "manufacturing_date, price, unit) AS product,\n"
                         + "  ROW(company_name, department, salary) AS work\n"
-                        + "FROM kafka_source";
+                        + "FROM kafka_source\n"
+                        + "WHERE uuid IS NOT NULL";
 
                 LOG.info("Starting INSERT pipeline: Kafka -> HBase");
                 tableEnv.executeSql(insertSql);
