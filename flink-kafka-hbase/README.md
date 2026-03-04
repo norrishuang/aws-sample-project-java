@@ -34,21 +34,53 @@ Pre-create the HBase table with required column families:
 
 ```bash
 hbase shell
-create 'default:user_order', 'info'
+create 'default:user_order', 'info', 'transaction', 'product', 'work'
 ```
 
 ### Kafka Message Format
 
 ```json
-{"customerId": 3118918651, "transactionAmount": 266060, "sourceIp": "123.160.106.5", "status": "SUCCESS", "transactionTime": "2026-03-04 00:08:31.508426"}
+{
+  "uuid": "67f3fe83-42e7-4ab6-973d-376e909003fc",
+  "customerId": 7691936731,
+  "transactionAmount": 568678,
+  "sourceIp": "192.171.92.115",
+  "status": "PENDING",
+  "transactionTime": "2026-03-04 01:22:20.717497",
+  "user_name": "baitao",
+  "phone_number": "13350069536",
+  "product_id": 13,
+  "product_name": "printer",
+  "product_type": "self",
+  "manufacturing_date": 2022,
+  "price": 733.94,
+  "unit": 23.0,
+  "email": "fxiao@gmail.com",
+  "address": "天津市建军县长寿韩街Z座 216135",
+  "city": "柳市",
+  "country": "东萨摩亚",
+  "ip_address": "198.139.127.194",
+  "website": "https://www.yuan.cn/",
+  "company_name": "同兴万点信息有限公司",
+  "department": "Operations",
+  "salary": 982593.74,
+  "age": 47,
+  "gender": "Female",
+  "created_date": "2023-04-28 23:28:08",
+  "last_login": "2024-08-04 13:28:02",
+  "score": 36
+}
 ```
 
 ### Column Family Mapping
 
 | HBase | Column Family | Columns |
 |-------|--------------|---------|
-| Row Key | — | `customerId_transactionTime` (composite) |
-| `info` | transaction details | `transactionAmount`, `sourceIp`, `status`, `transactionTime` |
+| **Row Key** | — | `uuid` |
+| **info** | User profile | `user_name`, `phone_number`, `email`, `address`, `city`, `country`, `ip_address`, `website`, `age`, `gender`, `created_date`, `last_login`, `score` |
+| **transaction** | Transaction details | `customerId`, `transactionAmount`, `sourceIp`, `status`, `transactionTime` |
+| **product** | Product info | `product_id`, `product_name`, `product_type`, `manufacturing_date`, `price`, `unit` |
+| **work** | Employment info | `company_name`, `department`, `salary` |
 
 ## Parameters
 
