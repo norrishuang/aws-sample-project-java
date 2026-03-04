@@ -133,7 +133,13 @@ public class KafkaToHBase {
                 // ============================================================
                 // 1. Create Kafka Source Table
                 // ============================================================
-                // Schema: 30 fields from datafaker-generated Kafka messages
+                // Schema: 28 fields from datafaker-generated Kafka messages
+                // Types aligned with actual JSON values:
+                //   phone_number → STRING (e.g. "13350069536", exceeds INT range)
+                //   unit → DOUBLE (e.g. 23.0)
+                //   price → DOUBLE (e.g. 733.94)
+                //   salary → DOUBLE (e.g. 982593.74)
+                // json.ignore-parse-errors = true: skip old-format records in topic
                 String createKafkaSource = String.format(
                         "CREATE TABLE kafka_source (\n"
                         + "  uuid STRING,\n"
@@ -143,13 +149,13 @@ public class KafkaToHBase {
                         + "  `status` STRING,\n"
                         + "  transactionTime STRING,\n"
                         + "  user_name STRING,\n"
-                        + "  phone_number INT,\n"
+                        + "  phone_number STRING,\n"
                         + "  product_id INT,\n"
                         + "  product_name STRING,\n"
                         + "  product_type STRING,\n"
                         + "  manufacturing_date INT,\n"
-                        + "  price DECIMAL(6,2),\n"
-                        + "  unit INT,\n"
+                        + "  price DOUBLE,\n"
+                        + "  unit DOUBLE,\n"
                         + "  email STRING,\n"
                         + "  address STRING,\n"
                         + "  city STRING,\n"
@@ -158,7 +164,7 @@ public class KafkaToHBase {
                         + "  website STRING,\n"
                         + "  company_name STRING,\n"
                         + "  department STRING,\n"
-                        + "  salary DECIMAL(8,2),\n"
+                        + "  salary DOUBLE,\n"
                         + "  age INT,\n"
                         + "  gender STRING,\n"
                         + "  created_date STRING,\n"
@@ -170,7 +176,8 @@ public class KafkaToHBase {
                         + "  'properties.bootstrap.servers' = '%s',\n"
                         + "  'properties.group.id' = '%s',\n"
                         + "  'scan.startup.mode' = '%s',\n"
-                        + "  'format' = '%s'\n"
+                        + "  'format' = '%s',\n"
+                        + "  'json.ignore-parse-errors' = 'true'\n"
                         + ")",
                         kafkaTopic, kafkaBootstrapServers, kafkaGroupId,
                         kafkaStartupMode, kafkaFormat);
@@ -190,15 +197,15 @@ public class KafkaToHBase {
                 String createHBaseSink = String.format(
                         "CREATE TABLE hbase_sink (\n"
                         + "  rowkey STRING,\n"
-                        + "  info ROW<user_name STRING, phone_number INT, email STRING, "
+                        + "  info ROW<user_name STRING, phone_number STRING, email STRING, "
                         + "address STRING, city STRING, country STRING, ip_address STRING, "
                         + "website STRING, age INT, gender STRING, "
                         + "created_date STRING, last_login STRING, score INT>,\n"
                         + "  transaction ROW<customerId BIGINT, transactionAmount BIGINT, "
                         + "sourceIp STRING, `status` STRING, transactionTime STRING>,\n"
                         + "  product ROW<product_id INT, product_name STRING, product_type STRING, "
-                        + "manufacturing_date INT, price DECIMAL(6,2), unit INT>,\n"
-                        + "  work ROW<company_name STRING, department STRING, salary DECIMAL(8,2)>\n"
+                        + "manufacturing_date INT, price DOUBLE, unit DOUBLE>,\n"
+                        + "  work ROW<company_name STRING, department STRING, salary DOUBLE>\n"
                         + ") WITH (\n"
                         + "  'connector' = 'hbase-2.2',\n"
                         + "  'table-name' = '%s',\n"
