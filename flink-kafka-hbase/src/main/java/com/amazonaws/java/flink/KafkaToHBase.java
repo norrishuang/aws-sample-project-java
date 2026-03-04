@@ -133,18 +133,17 @@ public class KafkaToHBase {
                 // ============================================================
                 // 1. Create Kafka Source Table
                 // ============================================================
+                // Schema matches Kafka message format:
+                // {"customerId":3118918651,"transactionAmount":266060,
+                //  "sourceIp":"123.160.106.5","status":"SUCCESS",
+                //  "transactionTime":"2026-03-04 00:08:31.508426"}
                 String createKafkaSource = String.format(
                         "CREATE TABLE kafka_source (\n"
-                        + "  uuid STRING,\n"
-                        + "  user_name STRING,\n"
-                        + "  phone_number BIGINT,\n"
-                        + "  product_id INT,\n"
-                        + "  product_name STRING,\n"
-                        + "  product_type STRING,\n"
-                        + "  manufacturing_date INT,\n"
-                        + "  price FLOAT,\n"
-                        + "  unit INT,\n"
-                        + "  ts TIMESTAMP(3)\n"
+                        + "  customerId BIGINT,\n"
+                        + "  transactionAmount BIGINT,\n"
+                        + "  sourceIp STRING,\n"
+                        + "  status STRING,\n"
+                        + "  transactionTime STRING\n"
                         + ") WITH (\n"
                         + "  'connector' = 'kafka',\n"
                         + "  'topic' = '%s',\n"
@@ -162,14 +161,14 @@ public class KafkaToHBase {
                 // ============================================================
                 // 2. Create HBase Sink Table
                 // ============================================================
-                // The rowkey is a composite key: uuid + '_' + timestamp_millis (BIGINT as epoch ms).
+                // RowKey: customerId + '_' + transactionTime (sortable string)
+                // Column Family 'info': transaction details
                 // Flink HBase connector requires ROW type for each column family.
                 String createHBaseSink = String.format(
                         "CREATE TABLE hbase_sink (\n"
                         + "  rowkey STRING,\n"
-                        + "  info ROW<user_name STRING, phone_number BIGINT, ts TIMESTAMP(3)>,\n"
-                        + "  product ROW<product_id INT, product_name STRING, product_type STRING, "
-                        + "manufacturing_date INT, price FLOAT, unit INT>\n"
+                        + "  info ROW<transactionAmount BIGINT, sourceIp STRING, "
+                        + "status STRING, transactionTime STRING>\n"
                         + ") WITH (\n"
                         + "  'connector' = 'hbase-2.2',\n"
                         + "  'table-name' = '%s',\n"
@@ -184,16 +183,12 @@ public class KafkaToHBase {
                 // ============================================================
                 // 3. Execute INSERT: Kafka → HBase
                 // ============================================================
-                // Build composite rowkey: uuid + '_' + epoch_millis from ts.
-                // Flink 1.20 disallows CAST(TIMESTAMP AS BIGINT).
-                // Use DATE_FORMAT to format ts as a sortable string: yyyyMMddHHmmssSSS
+                // RowKey: customerId + '_' + transactionTime (replace special chars for clean key)
                 String insertSql =
                         "INSERT INTO hbase_sink\n"
                         + "SELECT\n"
-                        + "  uuid || '_' || DATE_FORMAT(ts, 'yyyyMMddHHmmssSSS') AS rowkey,\n"
-                        + "  ROW(user_name, phone_number, ts) AS info,\n"
-                        + "  ROW(product_id, product_name, product_type, "
-                        + "manufacturing_date, price, unit) AS product\n"
+                        + "  CAST(customerId AS STRING) || '_' || REPLACE(REPLACE(transactionTime, ' ', '_'), ':', '') AS rowkey,\n"
+                        + "  ROW(transactionAmount, sourceIp, status, transactionTime) AS info\n"
                         + "FROM kafka_source";
 
                 LOG.info("Starting INSERT pipeline: Kafka -> HBase");

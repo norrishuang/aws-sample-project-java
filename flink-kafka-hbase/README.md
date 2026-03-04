@@ -34,16 +34,21 @@ Pre-create the HBase table with required column families:
 
 ```bash
 hbase shell
-create 'default:user_order', 'info', 'product'
+create 'default:user_order', 'info'
+```
+
+### Kafka Message Format
+
+```json
+{"customerId": 3118918651, "transactionAmount": 266060, "sourceIp": "123.160.106.5", "status": "SUCCESS", "transactionTime": "2026-03-04 00:08:31.508426"}
 ```
 
 ### Column Family Mapping
 
 | HBase | Column Family | Columns |
 |-------|--------------|---------|
-| Row Key | — | `uuid_timestamp` (composite: uuid + '_' + epoch millis) |
-| `info` | user info | `user_name`, `phone_number`, `ts` |
-| `product` | product info | `product_id`, `product_name`, `product_type`, `manufacturing_date`, `price`, `unit` |
+| Row Key | — | `customerId_transactionTime` (composite) |
+| `info` | transaction details | `transactionAmount`, `sourceIp`, `status`, `transactionTime` |
 
 ## Parameters
 
