@@ -190,11 +190,20 @@ public class MySQLCDCToIcebergDynamic {
         // ============================================================
         // includeSchema=true: Debezium JSON will contain full column type info,
         // which CDCDynamicRecordGenerator uses for accurate Iceberg type mapping.
+        //
+        // tableList format: Flink CDC requires each table to be fully qualified as "db.table".
+        //   --mysql.tables supports:
+        //     1. Regex:       ".*"  or "user_.*"    → prefixed as "norrisdb\\..*"
+        //     2. Multi-table: "t1|t2|t3"            → expanded to "norrisdb.t1,norrisdb.t2,norrisdb.t3"
+        //     3. Single:      "orders"              → prefixed as "norrisdb.orders"
+        String qualifiedTables = buildQualifiedTableList(mysqlDatabase, mysqlTables);
+        LOG.info("MySQL tableList: {}", qualifiedTables);
+
         MySqlSource<String> mySqlSource = MySqlSource.<String>builder()
                 .hostname(mysqlHostname)
                 .port(mysqlPort)
                 .databaseList(mysqlDatabase)
-                .tableList(mysqlDatabase + "." + mysqlTables)
+                .tableList(qualifiedTables)
                 .username(mysqlUsername)
                 .password(mysqlPassword)
                 .serverTimeZone(serverTimezone)
@@ -387,5 +396,51 @@ public class MySQLCDCToIcebergDynamic {
         }
 
         return props;
+    }
+
+    // ==================== Table List Builder ====================
+
+    /**
+     * Build fully qualified table list for Flink CDC MySqlSource.
+     * Flink CDC requires each table in the format "database.table".
+     *
+     * <p>Handles three input patterns:
+     * <ul>
+     *   <li>Regex pattern (contains *, ?, [, +, ^, $, \): prefix with "database\\." for regex matching</li>
+     *   <li>Pipe-separated list ("t1|t2|t3"): expand each to "database.t1,database.t2,database.t3"</li>
+     *   <li>Single table ("orders"): prefix as "database.orders"</li>
+     *   <li>Already qualified ("db.table"): pass through as-is</li>
+     * </ul>
+     */
+    private static String buildQualifiedTableList(String database, String tables) {
+        // If already contains dots (fully qualified), pass through
+        // e.g. "norrisdb.orders,norrisdb.customers" or "norrisdb\\..*"
+        if (tables.contains(".")) {
+            return tables;
+        }
+
+        // Check if it's a regex pattern (contains regex metacharacters other than |)
+        boolean isRegex = tables.matches(".*[*?\\[\\]+^$\\\\].*");
+
+        if (isRegex) {
+            // Regex mode: prefix with "database\\." for Debezium regex matching
+            // e.g. ".*" → "norrisdb\\..*"
+            // e.g. "user_.*" → "norrisdb\\.user_.*"
+            return database + "\\\\." + tables;
+        }
+
+        // Pipe-separated or single table: split by | and qualify each
+        // e.g. "t1|t2|t3" → "norrisdb.t1,norrisdb.t2,norrisdb.t3"
+        // e.g. "orders" → "norrisdb.orders"
+        String[] tableNames = tables.split("\\|");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < tableNames.length; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            String t = tableNames[i].trim();
+            sb.append(database).append(".").append(t);
+        }
+        return sb.toString();
     }
 }
