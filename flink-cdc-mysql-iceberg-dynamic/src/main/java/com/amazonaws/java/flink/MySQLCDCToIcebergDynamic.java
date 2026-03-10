@@ -40,6 +40,15 @@ import java.util.Properties;
  *     └─ DynamicCommitter        (built-in: commits to Iceberg catalog)
  * </pre>
  *
+ * <h2>Sink Targets</h2>
+ * <ul>
+ *   <li>{@code --sink.target iceberg} (default) — writes to standard Iceberg catalog
+ *       (Glue, Hive, Hadoop, or REST)</li>
+ *   <li>{@code --sink.target s3tables} — writes to Amazon S3 Tables via REST catalog
+ *       with SigV4 authentication. Requires {@code --s3tables.warehouse} (table bucket ARN)
+ *       and {@code --aws.region}.</li>
+ * </ul>
+ *
  * <h2>Key Design Decisions</h2>
  * <ul>
  *   <li>The raw {@code DataStream<String>} is passed directly to {@code DynamicIcebergSink.forInput()},
@@ -136,11 +145,36 @@ public class MySQLCDCToIcebergDynamic {
         String serverTimezone  = params.get("mysql.server.timezone", "UTC");
 
         // ============================================================
-        // 3. Iceberg configuration
+        // 3. Sink target & Iceberg configuration
+        //    --sink.target  iceberg  → use Glue/Hive/Hadoop/REST catalog (original behavior)
+        //    --sink.target  s3tables → use S3 Tables REST catalog with SigV4
         // ============================================================
-        String  catalogType    = params.get("iceberg.catalog.type", "hadoop");
-        String  catalogName    = params.get("iceberg.catalog.name", "iceberg_catalog");
-        String  warehouse      = params.get("iceberg.warehouse", "s3://my-bucket/warehouse");
+        String  sinkTarget     = params.get("sink.target", "iceberg").toLowerCase();
+        String  catalogType;
+        String  catalogName;
+        String  warehouse;
+
+        if ("s3tables".equals(sinkTarget)) {
+            // S3 Tables: force REST catalog with SigV4
+            catalogType = "rest";
+            catalogName = params.get("iceberg.catalog.name", "s3tables_catalog");
+            warehouse   = params.get("s3tables.warehouse",
+                    params.get("iceberg.warehouse", ""));
+            // S3 Tables requires a table bucket ARN as warehouse
+            if (warehouse.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "S3 Tables requires --s3tables.warehouse (table bucket ARN), e.g. " +
+                        "arn:aws:s3tables:us-east-1:123456789012:bucket/my-table-bucket");
+            }
+            LOG.info("Sink target: S3 Tables — warehouse (table bucket ARN): {}", warehouse);
+        } else {
+            // Standard Iceberg catalog (glue/hive/hadoop/rest)
+            catalogType = params.get("iceberg.catalog.type", "hadoop");
+            catalogName = params.get("iceberg.catalog.name", "iceberg_catalog");
+            warehouse   = params.get("iceberg.warehouse", "s3://my-bucket/warehouse");
+            LOG.info("Sink target: Iceberg — catalog type: {}", catalogType);
+        }
+
         String  namespace      = params.get("iceberg.namespace", "default");
         String  branch         = params.get("iceberg.branch", null);
         boolean upsertEnabled  = params.getBoolean("sink.upsert", false);
@@ -148,8 +182,8 @@ public class MySQLCDCToIcebergDynamic {
 
         LOG.info("MySQL Source — Host: {}, Port: {}, Database: {}, Tables: {}",
                 mysqlHostname, mysqlPort, mysqlDatabase, mysqlTables);
-        LOG.info("Iceberg Sink — Catalog: {}, Warehouse: {}, Namespace: {}, Upsert: {}",
-                catalogType, warehouse, namespace, upsertEnabled);
+        LOG.info("Sink — Target: {}, Catalog: {} ({}), Warehouse: {}, Namespace: {}, Upsert: {}",
+                sinkTarget, catalogName, catalogType, warehouse, namespace, upsertEnabled);
 
         // ============================================================
         // 4. Build MySQL CDC Source
@@ -263,16 +297,36 @@ public class MySQLCDCToIcebergDynamic {
         props.put("catalog-type", catalogType);
         props.put("warehouse", warehouse);
 
+        String sinkTarget = params.get("sink.target", "iceberg").toLowerCase();
+
         // Catalog-specific properties
         switch (catalogType) {
             case "rest":
-                props.put("uri", params.get("iceberg.rest.uri", "http://localhost:8181"));
-                if (params.getBoolean("iceberg.rest.sigv4.enabled", false)) {
+                if ("s3tables".equals(sinkTarget)) {
+                    // S3 Tables REST catalog configuration
+                    // URI: S3 Tables endpoint (regional)
                     String region = params.get("aws.region", "us-east-1");
+                    String s3tablesUri = params.get("s3tables.rest.uri",
+                            "https://s3tables." + region + ".amazonaws.com/iceberg");
+                    props.put("uri", s3tablesUri);
+
+                    // SigV4 authentication is mandatory for S3 Tables
                     props.put("rest.sigv4-enabled", "true");
                     props.put("rest.signing-name", "s3tables");
                     props.put("rest.signing-region", region);
                     props.put("client.region", region);
+
+                    LOG.info("S3 Tables REST catalog — URI: {}, Region: {}", s3tablesUri, region);
+                } else {
+                    // Generic REST catalog
+                    props.put("uri", params.get("iceberg.rest.uri", "http://localhost:8181"));
+                    if (params.getBoolean("iceberg.rest.sigv4.enabled", false)) {
+                        String region = params.get("aws.region", "us-east-1");
+                        props.put("rest.sigv4-enabled", "true");
+                        props.put("rest.signing-name", "s3tables");
+                        props.put("rest.signing-region", region);
+                        props.put("client.region", region);
+                    }
                 }
                 break;
 
@@ -314,7 +368,14 @@ public class MySQLCDCToIcebergDynamic {
         }
 
         // S3 FileIO properties
-        if (warehouse.startsWith("s3://") || warehouse.startsWith("s3a://")) {
+        if ("s3tables".equals(sinkTarget)) {
+            // S3 Tables: IO is handled via REST catalog's vended credentials.
+            // Set S3FileIO explicitly for compatibility; the REST catalog will
+            // provide the actual credentials via the credential-vending flow.
+            props.put("io-impl", "org.apache.iceberg.aws.s3.S3FileIO");
+            String region = params.get("aws.region", "us-east-1");
+            props.put("client.region", region);
+        } else if (warehouse.startsWith("s3://") || warehouse.startsWith("s3a://")) {
             props.put("io-impl", "org.apache.iceberg.aws.s3.S3FileIO");
             String s3Endpoint = params.get("iceberg.s3.endpoint", null);
             if (s3Endpoint != null && !s3Endpoint.isEmpty()) {

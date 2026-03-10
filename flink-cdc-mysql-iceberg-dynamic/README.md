@@ -102,6 +102,12 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 
 ## 配置参数
 
+### Sink Target
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `sink.target` | iceberg | 写入目标：`iceberg`（标准 Iceberg catalog）或 `s3tables`（Amazon S3 Tables） |
+
 ### MySQL CDC
 
 | 参数 | 默认值 | 说明 |
@@ -114,7 +120,7 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 | `mysql.tables` | `.*` | 表名（支持正则匹配多表） |
 | `mysql.server.timezone` | UTC | 时区 |
 
-### Iceberg
+### Iceberg（sink.target=iceberg 时使用）
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
@@ -123,6 +129,16 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 | `iceberg.warehouse` | s3://my-bucket/warehouse | 仓库路径 |
 | `iceberg.namespace` | default | 命名空间 |
 | `iceberg.branch` | null | 写入分支（可选） |
+
+### S3 Tables（sink.target=s3tables 时使用）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `s3tables.warehouse` | （必填） | S3 Tables table bucket ARN，如 `arn:aws:s3tables:us-east-1:123456789012:bucket/my-table-bucket` |
+| `s3tables.rest.uri` | `https://s3tables.<region>.amazonaws.com/iceberg` | S3 Tables REST endpoint（自动按 region 生成） |
+| `aws.region` | us-east-1 | AWS Region |
+| `iceberg.catalog.name` | s3tables_catalog | Catalog 名称（可选） |
+| `iceberg.namespace` | default | Namespace |
 
 ### Dynamic Sink
 
@@ -140,6 +156,9 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 
 #### REST Catalog（AWS S3 Tables）
 ```
+# 推荐使用 --sink.target s3tables 方式（自动配置 REST + SigV4）
+# 以下为手动配置 REST catalog 连接 S3 Tables 的方式：
+iceberg.catalog.type=rest
 iceberg.rest.uri=https://s3tables.us-east-1.amazonaws.com/iceberg
 iceberg.rest.sigv4.enabled=true
 aws.region=us-east-1
@@ -162,18 +181,43 @@ iceberg.glue.endpoint=                # 可选，VPC 端点
 ```bash
 # 构建
 mvn clean package
+```
 
-# 运行
+### 写入标准 Iceberg（Glue Catalog）
+
+```bash
 flink run \
   -c com.amazonaws.java.flink.MySQLCDCToIcebergDynamic \
   target/flink-cdc-mysql-iceberg-dynamic-1.0-SNAPSHOT.jar \
+  --sink.target iceberg \
   --mysql.hostname localhost \
   --mysql.database testdb \
   --mysql.tables "orders|customers" \
+  --iceberg.catalog.type glue \
   --iceberg.warehouse s3://my-bucket/warehouse \
-  --sink.immediate.table.update true \
+  --aws.region us-east-1 \
   --sink.upsert true
 ```
+
+### 写入 Amazon S3 Tables
+
+```bash
+flink run \
+  -c com.amazonaws.java.flink.MySQLCDCToIcebergDynamic \
+  target/flink-cdc-mysql-iceberg-dynamic-1.0-SNAPSHOT.jar \
+  --sink.target s3tables \
+  --mysql.hostname localhost \
+  --mysql.database testdb \
+  --mysql.tables "orders|customers" \
+  --s3tables.warehouse arn:aws:s3tables:us-east-1:123456789012:bucket/my-table-bucket \
+  --aws.region us-east-1 \
+  --iceberg.namespace my_namespace \
+  --sink.upsert true
+```
+
+> **注意：** S3 Tables 需要提前创建 Table Bucket，`--s3tables.warehouse` 传入 Table Bucket 的 ARN。
+> Namespace 和表会由 Dynamic Sink 自动创建。
+> 运行环境（EMR/KDA）需要有访问 S3 Tables 的 IAM 权限。
 
 ## Schema Evolution
 
