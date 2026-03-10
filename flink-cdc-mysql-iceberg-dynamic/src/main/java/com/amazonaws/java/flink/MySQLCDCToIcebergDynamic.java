@@ -4,10 +4,7 @@ import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 import org.apache.flink.cdc.connectors.mysql.source.MySqlSource;
 import org.apache.flink.cdc.debezium.JsonDebeziumDeserializationSchema;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.connector.kafka.source.KafkaSource;
-import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.LocalStreamEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -30,28 +27,18 @@ import java.util.Properties;
  *
  * <h2>Architecture</h2>
  * <pre>
- *   Data Source (MySQL CDC or Kafka)
+ *   MySQL CDC Source (Debezium JSON)
  *       │
  *       ▼
- *   DataStream&lt;String&gt;  (raw CDC JSON events — Debezium format)
+ *   DataStream&lt;String&gt;  (raw CDC JSON events)
  *       │
  *       ▼
  *   DynamicIcebergSink
  *     ├─ DynamicRecordGenerator  (CDCDynamicRecordGenerator: converts JSON → DynamicRecord)
- *     │    └─ Routes each record to target table via source.table field
  *     ├─ DynamicRecordProcessor  (built-in: schema evolution, table creation, routing)
  *     ├─ DynamicWriter           (built-in: writes data files)
  *     └─ DynamicCommitter        (built-in: commits to Iceberg catalog)
  * </pre>
- *
- * <h2>Source Types</h2>
- * <ul>
- *   <li>{@code --source.type mysql} (default) — Flink CDC MySqlSource, reads binlog directly</li>
- *   <li>{@code --source.type kafka} — consume Debezium CDC JSON from a Kafka topic.
- *       Supports multiple MySQL tables mixed in one topic; records are automatically
- *       routed to their respective Iceberg/S3Tables tables via the {@code source.table}
- *       field in the Debezium JSON envelope.</li>
- * </ul>
  *
  * <h2>Sink Targets</h2>
  * <ul>
@@ -147,11 +134,8 @@ public class MySQLCDCToIcebergDynamic {
                 cpConfig.getMinPauseBetweenCheckpoints());
 
         // ============================================================
-        // 2. Source configuration
+        // 2. MySQL CDC Source configuration
         // ============================================================
-        String sourceType      = params.get("source.type", "mysql").toLowerCase();
-
-        // MySQL CDC params (used when source.type=mysql)
         String mysqlHostname   = params.get("mysql.hostname", "localhost");
         int    mysqlPort       = params.getInt("mysql.port", 3306);
         String mysqlUsername   = params.get("mysql.username", "root");
@@ -159,12 +143,6 @@ public class MySQLCDCToIcebergDynamic {
         String mysqlDatabase   = params.get("mysql.database", "testdb");
         String mysqlTables     = params.get("mysql.tables", ".*"); // regex pattern
         String serverTimezone  = params.get("mysql.server.timezone", "UTC");
-
-        // Kafka params (used when source.type=kafka)
-        String kafkaBootstrap  = params.get("kafka.bootstrap.servers", "localhost:9092");
-        String kafkaTopic      = params.get("kafka.topic", "cdc-events");
-        String kafkaGroupId    = params.get("kafka.group.id", "flink-cdc-iceberg");
-        String kafkaStartOffset = params.get("kafka.start.offset", "earliest"); // earliest|latest|group-offsets
 
         // ============================================================
         // 3. Sink target & Iceberg configuration
@@ -202,85 +180,32 @@ public class MySQLCDCToIcebergDynamic {
         boolean upsertEnabled  = params.getBoolean("sink.upsert", false);
         int     writeParallel  = params.getInt("sink.parallelism", 2);
 
-        LOG.info("Source type: {}", sourceType);
-        if ("mysql".equals(sourceType)) {
-            LOG.info("MySQL Source — Host: {}, Port: {}, Database: {}, Tables: {}",
-                    mysqlHostname, mysqlPort, mysqlDatabase, mysqlTables);
-        } else {
-            LOG.info("Kafka Source — Brokers: {}, Topic: {}, GroupId: {}, StartOffset: {}",
-                    kafkaBootstrap, kafkaTopic, kafkaGroupId, kafkaStartOffset);
-        }
+        LOG.info("MySQL Source — Host: {}, Port: {}, Database: {}, Tables: {}",
+                mysqlHostname, mysqlPort, mysqlDatabase, mysqlTables);
         LOG.info("Sink — Target: {}, Catalog: {} ({}), Warehouse: {}, Namespace: {}, Upsert: {}",
                 sinkTarget, catalogName, catalogType, warehouse, namespace, upsertEnabled);
 
         // ============================================================
-        // 4. Build Data Source (MySQL CDC or Kafka)
+        // 4. Build MySQL CDC Source
         // ============================================================
-        DataStream<String> cdcStream;
+        // includeSchema=true: Debezium JSON will contain full column type info,
+        // which CDCDynamicRecordGenerator uses for accurate Iceberg type mapping.
+        MySqlSource<String> mySqlSource = MySqlSource.<String>builder()
+                .hostname(mysqlHostname)
+                .port(mysqlPort)
+                .databaseList(mysqlDatabase)
+                .tableList(mysqlDatabase + "." + mysqlTables)
+                .username(mysqlUsername)
+                .password(mysqlPassword)
+                .serverTimeZone(serverTimezone)
+                .deserializer(new JsonDebeziumDeserializationSchema(true))
+                .includeSchemaChanges(false)
+                .scanNewlyAddedTableEnabled(true)
+                .build();
 
-        if ("kafka".equals(sourceType)) {
-            // Kafka Source: consume Debezium CDC JSON from a Kafka topic
-            // Supports multiple MySQL tables mixed in a single topic —
-            // CDCDynamicRecordGenerator routes each record by source.table field.
-            OffsetsInitializer startingOffsets;
-            switch (kafkaStartOffset) {
-                case "latest":
-                    startingOffsets = OffsetsInitializer.latest();
-                    break;
-                case "group-offsets":
-                    startingOffsets = OffsetsInitializer.committedOffsets();
-                    break;
-                case "earliest":
-                default:
-                    startingOffsets = OffsetsInitializer.earliest();
-                    break;
-            }
-
-            KafkaSource<String> kafkaSource = KafkaSource.<String>builder()
-                    .setBootstrapServers(kafkaBootstrap)
-                    .setTopics(kafkaTopic)
-                    .setGroupId(kafkaGroupId)
-                    .setStartingOffsets(startingOffsets)
-                    .setValueOnlyDeserializer(new SimpleStringSchema())
-                    .build();
-
-            // Kafka source can run with multiple parallelism (one per partition)
-            int kafkaParallelism = params.getInt("kafka.parallelism", 0);
-            if (kafkaParallelism > 0) {
-                cdcStream = env
-                        .fromSource(kafkaSource, WatermarkStrategy.noWatermarks(), "Kafka CDC Source")
-                        .setParallelism(kafkaParallelism);
-            } else {
-                cdcStream = env
-                        .fromSource(kafkaSource, WatermarkStrategy.noWatermarks(), "Kafka CDC Source");
-            }
-
-            LOG.info("Kafka Source configured — topic: {}, groupId: {}, startOffset: {}",
-                    kafkaTopic, kafkaGroupId, kafkaStartOffset);
-        } else {
-            // MySQL CDC Source (original behavior)
-            // includeSchema=true: Debezium JSON will contain full column type info,
-            // which CDCDynamicRecordGenerator uses for accurate Iceberg type mapping.
-            MySqlSource<String> mySqlSource = MySqlSource.<String>builder()
-                    .hostname(mysqlHostname)
-                    .port(mysqlPort)
-                    .databaseList(mysqlDatabase)
-                    .tableList(mysqlDatabase + "." + mysqlTables)
-                    .username(mysqlUsername)
-                    .password(mysqlPassword)
-                    .serverTimeZone(serverTimezone)
-                    .deserializer(new JsonDebeziumDeserializationSchema(true))
-                    .includeSchemaChanges(false)
-                    .scanNewlyAddedTableEnabled(true)
-                    .build();
-
-            cdcStream = env
-                    .fromSource(mySqlSource, WatermarkStrategy.noWatermarks(), "MySQL CDC Source")
-                    .setParallelism(1); // CDC source must be single-parallelism for ordering
-
-            LOG.info("MySQL CDC Source configured — host: {}, database: {}, tables: {}",
-                    mysqlHostname, mysqlDatabase, mysqlTables);
-        }
+        DataStream<String> cdcStream = env
+                .fromSource(mySqlSource, WatermarkStrategy.noWatermarks(), "MySQL CDC Source")
+                .setParallelism(1); // CDC source must be single-parallelism for ordering
 
         // ============================================================
         // 5. Build CatalogLoader
