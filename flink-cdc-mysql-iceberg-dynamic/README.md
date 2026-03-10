@@ -219,6 +219,92 @@ flink run \
 > Namespace 和表会由 Dynamic Sink 自动创建。
 > 运行环境（EMR/KDA）需要有访问 S3 Tables 的 IAM 权限。
 
+## 多表路由
+
+一个 Flink Job 可以同时同步多个 MySQL 表，通过 `--mysql.tables` 用正则表达式指定：
+
+```bash
+# 同步指定的三张表
+--mysql.tables "orders|customers|products"
+
+# 同步所有表
+--mysql.tables ".*"
+
+# 前缀匹配
+--mysql.tables "user_.*"
+```
+
+**路由原理：** MySQL CDC Source 读取多张表的 binlog，产生的每条 Debezium JSON 都包含 `source.table` 字段，`CDCDynamicRecordGenerator` 从中提取原始表名，构建 `TableIdentifier(namespace, tableName)` 实现自动路由：
+
+```
+MySQL CDC Source
+  ├─ norrisdb.orders      ─┐
+  ├─ norrisdb.customers   ─┤  DataStream<String> (混合 CDC 流)
+  └─ norrisdb.products    ─┘
+                            │
+                            ▼
+  CDCDynamicRecordGenerator (按 source.table 路由)
+                            │
+                            ▼
+  DynamicIcebergSink
+    ├─ namespace.orders       (自动建表 + 写入)
+    ├─ namespace.customers    (自动建表 + 写入)
+    └─ namespace.products     (自动建表 + 写入)
+```
+
+每张表的 Schema 独立管理，Schema Evolution 独立生效。通过 `scanNewlyAddedTableEnabled(true)` 还支持运行期间动态发现 MySQL 新增的表，无需重启 Job。
+
+## CDC 变更处理（Update / Delete）
+
+本项目完整支持 MySQL 的 INSERT / UPDATE / DELETE 操作，通过 Iceberg format-version=2 的行级变更能力实现。
+
+### 处理流程
+
+```
+MySQL                    Debezium JSON                CDCDynamicRecordGenerator        Iceberg
+─────                    ─────────────                ─────────────────────────        ───────
+INSERT INTO orders       op="c", after={...}          RowKind=INSERT                   写入 data file
+  VALUES(1,'phone',100)
+
+UPDATE orders            op="u", before={price:100}   RowKind=UPDATE_AFTER             equality delete 旧行
+  SET price=200            after={price:200}           取 after 数据                    + 写入新 data file
+  WHERE id=1
+
+DELETE FROM orders       op="d", before={id:1,...}    RowKind=DELETE                   equality delete 该行
+  WHERE id=1               after=null                  取 before 数据
+```
+
+### 主键识别与 Equality Delete
+
+开启 `--sink.upsert true` 后，Dynamic Sink 使用 **Equality Delete** 机制处理变更：
+
+1. **主键提取**：`CDCDynamicRecordGenerator` 从 Debezium schema 元数据中识别主键字段（`optional=false` 的字段），缓存在 `primaryKeyCache` 中
+2. **设置 Equality Fields**：将主键字段设置到 `DynamicRecord.setEqualityFields()`，告诉 Iceberg 用哪些字段做行匹配
+3. **写入过程**：
+   - **UPDATE**：Iceberg 先写一个 equality delete file（按主键标记旧行删除），再写一个 data file（新数据）
+   - **DELETE**：Iceberg 写一个 equality delete file（按主键标记该行删除）
+4. **读取合并**：查询时 Iceberg 引擎自动合并 data file 和 delete file，返回最新状态
+
+### Upsert 模式的优势
+
+| 特性 | upsert=true（推荐） | upsert=false |
+|---|---|---|
+| 写入方式 | 主键去重，新数据覆盖旧数据 | 保留完整 changelog（INSERT + DELETE） |
+| Update 处理 | equality delete + insert（高效） | 需要 -U 和 +U 两条记录 |
+| Delete 处理 | equality delete | equality delete |
+| 表格式要求 | format-version=2 | format-version=2 |
+| 适用场景 | **CDC 同步（推荐）** | 需要保留变更历史的审计场景 |
+| 写入性能 | 更好（少写一半变更记录） | 一般 |
+| 读取性能 | 更好（数据量更小） | 一般（需要回放 changelog） |
+
+> **CDC 场景强烈建议开启 `--sink.upsert true`**，配合 Iceberg format-version=2，可以高效处理 MySQL 的全部 DML 操作。
+
+### 主键识别说明
+
+主键通过 Debezium schema 中 `optional=false`（即 MySQL 的 `NOT NULL`）字段启发式推断。在大多数场景下，MySQL 主键字段同时是 `NOT NULL` 的，识别准确。
+
+如果表中存在非主键的 `NOT NULL` 字段（如 `name VARCHAR(50) NOT NULL`），这些字段也会被加入 equality fields。这不会导致数据错误——只是让 equality delete 的匹配条件更严格，等价于 `WHERE id=1 AND name='xxx'` 而非 `WHERE id=1`。
+
 ## Schema Evolution
 
 Dynamic Sink 自动处理以下 schema 变更（**无需重启 Flink 作业**）：
