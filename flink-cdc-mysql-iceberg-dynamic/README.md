@@ -12,17 +12,30 @@
 ## 核心架构
 
 ```
-MySQL Database
+Data Source (MySQL CDC 或 Kafka)
     ↓ (Debezium CDC Events, JSON)
-Flink CDC Source (MySqlSource)
-    ↓ DataStream<String>
+DataStream<String>
+    ↓
 DynamicIcebergSink
-  ├─ CDCDynamicRecordGenerator  → 实现 DynamicRecordGenerator<String> 接口
-  │    将 CDC JSON 转换为 DynamicRecord（含 TableIdentifier, Schema, RowData 等）
+  ├─ CDCDynamicRecordGenerator  → 解析 CDC JSON，按 source.table 路由到各自的目标表
   ├─ DynamicRecordProcessor     → Iceberg 内置，处理 schema evolution / 表创建 / 路由
   ├─ DynamicWriter              → Iceberg 内置，写数据文件
-  └─ DynamicCommitter           → Iceberg 内置，提交到 Catalog
+  └─ DynamicCommitter           → Iceberg 内置，提交到 Catalog (Iceberg / S3 Tables)
 ```
+
+### 支持的数据源
+
+| Source | 参数 | 说明 |
+|---|---|---|
+| **MySQL CDC** | `--source.type mysql`（默认） | 直接读 MySQL binlog，Flink CDC |
+| **Kafka** | `--source.type kafka` | 从 Kafka topic 消费 Debezium JSON，支持多表混在同一个 topic |
+
+### 支持的 Sink 目标
+
+| Target | 参数 | 说明 |
+|---|---|---|
+| **Iceberg** | `--sink.target iceberg`（默认） | Glue / Hive / Hadoop / REST Catalog |
+| **S3 Tables** | `--sink.target s3tables` | Amazon S3 Tables，REST Catalog + SigV4 |
 
 ### 关键设计
 
@@ -106,9 +119,10 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
+| `source.type` | mysql | 数据源类型：`mysql`（CDC 直连）或 `kafka`（消费 Kafka topic） |
 | `sink.target` | iceberg | 写入目标：`iceberg`（标准 Iceberg catalog）或 `s3tables`（Amazon S3 Tables） |
 
-### MySQL CDC
+### MySQL CDC（source.type=mysql 时使用）
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
@@ -119,6 +133,18 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 | `mysql.database` | testdb | 数据库名 |
 | `mysql.tables` | `.*` | 表名（支持正则匹配多表） |
 | `mysql.server.timezone` | UTC | 时区 |
+
+### Kafka（source.type=kafka 时使用）
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `kafka.bootstrap.servers` | localhost:9092 | Kafka Broker 地址 |
+| `kafka.topic` | cdc-events | Kafka Topic（支持多表 CDC 数据混在同一个 topic） |
+| `kafka.group.id` | flink-cdc-iceberg | Consumer Group ID |
+| `kafka.start.offset` | earliest | 起始位点：`earliest` / `latest` / `group-offsets` |
+| `kafka.parallelism` | 0（自动） | Kafka Source 并行度，0 表示使用 Flink 默认 |
+
+> **多表路由：** 当多个 MySQL 表的 CDC 数据写入同一个 Kafka topic 时，`CDCDynamicRecordGenerator` 会从每条 Debezium JSON 的 `source.table` 字段提取原始表名，自动路由到对应的 Iceberg / S3 Tables 目标表。
 
 ### Iceberg（sink.target=iceberg 时使用）
 
@@ -218,6 +244,46 @@ flink run \
 > **注意：** S3 Tables 需要提前创建 Table Bucket，`--s3tables.warehouse` 传入 Table Bucket 的 ARN。
 > Namespace 和表会由 Dynamic Sink 自动创建。
 > 运行环境（EMR/KDA）需要有访问 S3 Tables 的 IAM 权限。
+
+### 从 Kafka 消费多表 CDC 写入 S3 Tables
+
+```bash
+flink run \
+  -c com.amazonaws.java.flink.MySQLCDCToIcebergDynamic \
+  target/flink-cdc-mysql-iceberg-dynamic-1.0-SNAPSHOT.jar \
+  --source.type kafka \
+  --kafka.bootstrap.servers b-1.my-msk-cluster.kafka.us-east-1.amazonaws.com:9092 \
+  --kafka.topic mysql-cdc-all-tables \
+  --kafka.group.id flink-s3tables-sync \
+  --kafka.start.offset earliest \
+  --sink.target s3tables \
+  --s3tables.warehouse arn:aws:s3tables:us-east-1:123456789012:bucket/my-table-bucket \
+  --aws.region us-east-1 \
+  --iceberg.namespace my_namespace \
+  --sink.upsert true
+```
+
+> **说明：** 多个 MySQL 表的 CDC 数据混在 `mysql-cdc-all-tables` 这一个 Kafka topic 中，
+> 每条消息的 Debezium JSON 包含 `source.table` 字段（如 `orders`、`customers`），
+> CDCDynamicRecordGenerator 会自动路由，在 S3 Tables 的 `my_namespace` 下创建
+> 对应的表（`my_namespace.orders`、`my_namespace.customers`）。
+
+### 从 Kafka 消费多表 CDC 写入 Iceberg（Glue Catalog）
+
+```bash
+flink run \
+  -c com.amazonaws.java.flink.MySQLCDCToIcebergDynamic \
+  target/flink-cdc-mysql-iceberg-dynamic-1.0-SNAPSHOT.jar \
+  --source.type kafka \
+  --kafka.bootstrap.servers localhost:9092 \
+  --kafka.topic mysql-cdc-all-tables \
+  --kafka.group.id flink-iceberg-sync \
+  --sink.target iceberg \
+  --iceberg.catalog.type glue \
+  --iceberg.warehouse s3://my-bucket/warehouse \
+  --aws.region us-east-1 \
+  --sink.upsert true
+```
 
 ## Schema Evolution
 
