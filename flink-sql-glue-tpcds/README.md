@@ -55,9 +55,49 @@ CREATE DATABASE IF NOT EXISTS tpcds;
 在 EMR 上使用 Flink Application Mode 运行 HiveCatalog + Glue 需要额外的依赖配置。
 EMR 默认的 Flink classpath **不包含 Spark 相关 jar**，而 `aws-glue-datacatalog-hive3-client.jar` 间接依赖了 Spark 类（如 `DriverTransferable`、`sparkproject.guava.cache.CacheLoader` 等），会导致 `NoClassDefFoundError`。
 
-### 方式一：通过 EMR Console / CLI 配置（推荐）
+### 通用步骤：将 Spark 依赖链接到 Flink lib 目录
 
-在创建 EMR 集群时，通过 **Software settings** 添加以下 Configuration：
+> ⚠️ **无论使用方式一还是方式二，都需要执行此步骤。**
+
+Flink Application Mode 构建 YARN 容器 classpath 时，**只会从 `/usr/lib/flink/lib/` 目录打包 jar 文件**。
+`yarn.application.classpath` 配置的路径（如 `/usr/lib/spark/jars/*`）会出现在 YARN 层面的 `CLASSPATH` 环境变量中，
+但 Flink 的 JVM 启动脚本使用的是自己从 `lib/` 目录构建的 `_FLINK_CLASSPATH`。
+因此需要将 Spark jar 链接到 Flink lib 目录，确保它们被 Flink 正确打包到容器中。
+
+SSH 到 EMR **Master 节点**后执行：
+
+```bash
+# 将所有 Spark jar 链接到 Flink lib 目录
+for jar in /usr/lib/spark/jars/spark-*.jar; do
+  name=$(basename $jar)
+  if [ ! -f "/usr/lib/flink/lib/$name" ] && [ ! -L "/usr/lib/flink/lib/$name" ]; then
+    sudo ln -sf $jar /usr/lib/flink/lib/$name
+  fi
+done
+
+# 验证
+echo "Spark jars linked to Flink lib:"
+ls /usr/lib/flink/lib/spark-* | wc -l
+```
+
+以下是关键依赖说明（EMR 7.12.0）：
+
+| Jar | 被谁依赖 | 缺失时的报错 |
+|-----|---------|------------|
+| `spark-tags_2.12-*.jar` | glue-hive3-client | `NoClassDefFoundError: DriverTransferable` |
+| `spark-network-common_2.12-*.jar` | glue-hive3-client | `NoClassDefFoundError: sparkproject/guava/cache/CacheLoader` |
+| `spark-core_2.12-*.jar` | glue-spark-client | Spark 核心类缺失 |
+| `spark-sql_2.12-*.jar` | glue-spark-client | Spark SQL 类缺失 |
+| 其他 `spark-*.jar` | 传递依赖 | 各类 `NoClassDefFoundError` |
+
+> **建议**：直接用上面的循环命令链接所有 `spark-*.jar`，避免逐个排查传递依赖。
+
+---
+
+### 方式一：通过 EMR Console / CLI 配置（推荐新建集群时使用）
+
+在创建 EMR 集群时，通过 **Software settings** 添加以下 Configuration。
+这会在集群启动时自动配置 `hive-site.xml` 和 `flink-conf.yaml`：
 
 ```json
 [
@@ -103,43 +143,42 @@ aws emr create-cluster \
   ...
 ```
 
-### 方式二：在已有 EMR 集群上手动配置
+> **注意**：集群创建后仍需 SSH 到 Master 节点执行上方的 [Spark 依赖链接步骤](#通用步骤将-spark-依赖链接到-flink-lib-目录)。
+> 可通过 EMR Bootstrap Action 自动化此步骤（见下方示例）。
 
-SSH 到 EMR Master 节点后执行以下步骤：
+#### 使用 Bootstrap Action 自动化软链接
 
-#### Step 1：将 Spark 依赖链接到 Flink lib 目录
-
-`aws-glue-datacatalog-hive3-client.jar` 间接依赖 Spark 类库。在 Application Mode 下，Flink 只会将 `/usr/lib/flink/lib/` 目录中的 jar 文件上传到 YARN 容器的 classpath。需要创建符号链接：
+创建 Bootstrap 脚本 `setup-flink-spark-deps.sh` 并上传到 S3：
 
 ```bash
-# 将所有 Spark jar 链接到 Flink lib 目录
+#!/bin/bash
+# Bootstrap Action: Link Spark jars to Flink lib for Glue Catalog dependency
 for jar in /usr/lib/spark/jars/spark-*.jar; do
   name=$(basename $jar)
   if [ ! -f "/usr/lib/flink/lib/$name" ] && [ ! -L "/usr/lib/flink/lib/$name" ]; then
     sudo ln -sf $jar /usr/lib/flink/lib/$name
   fi
 done
-
-# 验证
-ls -la /usr/lib/flink/lib/spark-* | head -5
 ```
 
-以下是需要链接的关键 jar（EMR 7.12.0）：
+在创建集群时添加 Bootstrap Action：
 
-| Jar | 作用 |
-|-----|------|
-| `spark-core_2.12-3.5.6-amzn-1.jar` | Spark 核心库 |
-| `spark-tags_2.12-3.5.6-amzn-1.jar` | 包含 `DriverTransferable` 等注解类 |
-| `spark-network-common_2.12-3.5.6-amzn-1.jar` | 包含 Spark shade 的 Guava (`org.sparkproject.guava`) |
-| `spark-sql_2.12-3.5.6-amzn-1.jar` | Spark SQL |
-| `spark-catalyst_2.12-3.5.6-amzn-1.jar` | Spark Catalyst |
-| `spark-unsafe_2.12-3.5.6-amzn-1.jar` | Spark Unsafe |
-| `spark-common-utils_2.12-3.5.6-amzn-1.jar` | Spark 通用工具 |
-| `spark-launcher_2.12-3.5.6-amzn-1.jar` | Spark Launcher |
-| `spark-kvstore_2.12-3.5.6-amzn-1.jar` | Spark KV Store |
-| `spark-network-shuffle_2.12-3.5.6-amzn-1.jar` | Spark Network Shuffle |
+```bash
+aws emr create-cluster \
+  ...
+  --bootstrap-actions '[{
+    "Name": "Link Spark jars to Flink lib",
+    "Path": "s3://<your-bucket>/scripts/setup-flink-spark-deps.sh"
+  }]'
+```
 
-> **建议**：直接用上面的循环命令链接所有 `spark-*.jar`，避免遗漏传递依赖。
+### 方式二：在已有 EMR 集群上手动配置
+
+SSH 到 EMR Master 节点后执行以下步骤：
+
+#### Step 1：将 Spark 依赖链接到 Flink lib 目录
+
+参照上方 [通用步骤](#通用步骤将-spark-依赖链接到-flink-lib-目录) 执行软链接命令。
 
 #### Step 2：修改 Flink 配置文件
 
