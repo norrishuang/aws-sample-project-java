@@ -57,7 +57,12 @@ EMR 默认的 Flink classpath **不包含 Spark 相关 jar**，而 `aws-glue-dat
 
 ### 通用步骤：将 Spark 依赖链接到 Flink lib 目录
 
-> ⚠️ **无论使用方式一还是方式二，都需要执行此步骤。**
+> ⚠️ **无论使用方式一还是方式二，都需要执行此步骤（仅 Application Mode 需要）。**
+
+#### 为什么 Application Mode 需要而 Session Mode 不需要？
+
+- **Session Mode**：JobManager/TaskManager 进程**直接在 Master 节点上启动**，继承当前 Shell 环境的 `HADOOP_CLASSPATH`。只需 `export HADOOP_CLASSPATH=$HADOOP_CLASSPATH:/usr/lib/spark/jars/*`，所有 jar 立即对 JVM 可见。
+- **Application Mode**：Flink 将 `main()` 方法放到 **YARN 容器**中执行。容器是一个隔离的运行环境，不会继承 Master 节点的环境变量。Flink 只会将 `/usr/lib/flink/lib/` 目录下的 jar 打包上传到 HDFS，再分发到容器的 classpath 中。因此，额外的依赖（如 Spark jar）必须通过**符号链接放入 `/usr/lib/flink/lib/`**，才能被 Flink 打包带入容器。
 
 Flink Application Mode 构建 YARN 容器 classpath 时，**只会从 `/usr/lib/flink/lib/` 目录打包 jar 文件**。
 `yarn.application.classpath` 配置的路径（如 `/usr/lib/spark/jars/*`）会出现在 YARN 层面的 `CLASSPATH` 环境变量中，
