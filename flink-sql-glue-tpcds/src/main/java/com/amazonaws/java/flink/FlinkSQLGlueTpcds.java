@@ -77,16 +77,26 @@ public class FlinkSQLGlueTpcds {
     }
 
     private static String resolveHiveConfDir() {
-        String emrHiveConf = "/etc/hive/conf.dist";
-        if (new File(emrHiveConf, "hive-site.xml").exists()) {
-            return emrHiveConf;
+        // Check common EMR hive conf locations in order
+        String[] candidates = {
+            "/etc/hive/conf",
+            "/etc/hive/conf.dist",
+            "/etc/hadoop/conf"
+        };
+        for (String dir : candidates) {
+            if (new File(dir, "hive-site.xml").exists()) {
+                LOG.info("Found hive-site.xml in: {}", dir);
+                return dir;
+            }
         }
+        // Fallback: current working dir (yarn container with shipped files)
         String cwd = System.getProperty("user.dir");
         if (new File(cwd, "hive-site.xml").exists()) {
             LOG.info("Found hive-site.xml in working directory: {}", cwd);
             return cwd;
         }
-        LOG.warn("hive-site.xml not found, falling back to {}", emrHiveConf);
-        return emrHiveConf;
+        // Default
+        LOG.warn("hive-site.xml not found, falling back to /etc/hive/conf");
+        return "/etc/hive/conf";
     }
 }
