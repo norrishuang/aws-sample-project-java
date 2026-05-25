@@ -136,6 +136,21 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
         // Build Iceberg schema from Debezium schema metadata (or infer from values as fallback)
         Schema schema = buildSchema(targetTableName, dataNode, schemaNode, op);
 
+        // When upsertEnabled=false and op="u", emit UPDATE_BEFORE from "before" data first
+        // This provides position delete semantics and avoids equality delete file explosion
+        if (!upsertEnabled && "u".equals(op)) {
+            JsonNode beforeNode = eventNode.get("before");
+            if (beforeNode != null && !beforeNode.isNull()) {
+                RowData beforeRowData = convertToRowData(beforeNode, schema, "u_before");
+                if (beforeRowData != null) {
+                    DynamicRecord beforeRecord = new DynamicRecord(
+                            tableIdentifier, branch, schema, beforeRowData,
+                            PartitionSpec.unpartitioned(), DistributionMode.HASH, writeParallelism);
+                    out.collect(beforeRecord);
+                }
+            }
+        }
+
         // Convert JSON to Flink RowData with correct RowKind
         RowData rowData = convertToRowData(dataNode, schema, op);
         if (rowData == null) {
@@ -468,8 +483,11 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
             case "r": // read (snapshot)
                 rowData.setRowKind(RowKind.INSERT);
                 break;
-            case "u": // update
+            case "u": // update (after)
                 rowData.setRowKind(RowKind.UPDATE_AFTER);
+                break;
+            case "u_before": // update (before) — used in non-upsert mode
+                rowData.setRowKind(RowKind.UPDATE_BEFORE);
                 break;
             case "d": // delete
                 rowData.setRowKind(RowKind.DELETE);
