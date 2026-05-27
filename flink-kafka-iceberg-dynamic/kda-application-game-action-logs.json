@@ -1,0 +1,55 @@
+{
+  "ApplicationName": "flink-kafka-game-action-iceberg",
+  "RuntimeEnvironment": "FLINK-1_20",
+  "ServiceExecutionRole": "arn:aws:iam::812046859005:role/service-role/kinesis-analytics-cdc-iceberg-streaming-us-east-1",
+  "ApplicationConfiguration": {
+    "ApplicationCodeConfiguration": {
+      "CodeContent": {
+        "S3ContentLocation": {
+          "BucketARN": "arn:aws:s3:::emr-hive-us-east-1-812046859005",
+          "FileKey": "jars/flink-kafka-iceberg-dynamic-1.0-SNAPSHOT.jar"
+        }
+      },
+      "CodeContentType": "ZIPFILE"
+    },
+    "FlinkApplicationConfiguration": {
+      "CheckpointConfiguration": {
+        "ConfigurationType": "CUSTOM",
+        "CheckpointingEnabled": true,
+        "CheckpointInterval": 60000,
+        "MinPauseBetweenCheckpoints": 30000
+      },
+      "MonitoringConfiguration": {
+        "ConfigurationType": "CUSTOM",
+        "MetricsLevel": "APPLICATION",
+        "LogLevel": "INFO"
+      },
+      "ParallelismConfiguration": {
+        "ConfigurationType": "CUSTOM",
+        "Parallelism": 2,
+        "ParallelismPerKPU": 1,
+        "AutoScalingEnabled": false
+      }
+    },
+    "EnvironmentProperties": {
+      "PropertyGroups": [
+        {
+          "PropertyGroupId": "FlinkApplicationProperties",
+          "PropertyMap": {
+            "kafka.bootstrap.servers": "boot-929.democluster.5ay35d.c11.kafka.us-east-1.amazonaws.com:9092,boot-fbo.democluster.5ay35d.c11.kafka.us-east-1.amazonaws.com:9092,boot-hnb.democluster.5ay35d.c11.kafka.us-east-1.amazonaws.com:9092",
+            "kafka.topic": "game-action-logs",
+            "kafka.group.id": "flink-kafka-game-action-iceberg",
+            "kafka.startup.mode": "earliest-offset",
+            "sink.target": "s3tables",
+            "s3tables.warehouse": "arn:aws:s3tables:us-east-1:812046859005:bucket/iceberg-data-812046859005",
+            "iceberg.namespace": "gamedb",
+            "iceberg.table": "game_action_logs",
+            "aws.region": "us-east-1",
+            "sink.parallelism": "2",
+            "checkpoint.interval": "60000"
+          }
+        }
+      ]
+    }
+  }
+}
