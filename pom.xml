@@ -21,6 +21,7 @@
         <module>flink-cdc-mysql-iceberg-dynamic</module>
         <module>flink-kafka-hbase</module>
         <module>flink-sql-glue-tpcds</module>
+        <module>flink-kafka-iceberg-dynamic</module>
     </modules>
 
     <properties>
