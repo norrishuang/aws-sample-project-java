@@ -1,0 +1,67 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "MSKAccess",
+      "Effect": "Allow",
+      "Action": [
+        "kafka-cluster:Connect",
+        "kafka-cluster:DescribeGroup",
+        "kafka-cluster:AlterGroup",
+        "kafka-cluster:DescribeTopic",
+        "kafka-cluster:ReadData"
+      ],
+      "Resource": [
+        "arn:aws:kafka:us-east-1:YOUR_ACCOUNT_ID:cluster/YOUR_MSK_CLUSTER/*",
+        "arn:aws:kafka:us-east-1:YOUR_ACCOUNT_ID:topic/YOUR_MSK_CLUSTER/*",
+        "arn:aws:kafka:us-east-1:YOUR_ACCOUNT_ID:group/YOUR_MSK_CLUSTER/*"
+      ]
+    },
+    {
+      "Sid": "S3TablesAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3tables:GetTableBucket",
+        "s3tables:ListTableBuckets",
+        "s3tables:CreateNamespace",
+        "s3tables:GetNamespace",
+        "s3tables:ListNamespaces",
+        "s3tables:CreateTable",
+        "s3tables:GetTable",
+        "s3tables:ListTables",
+        "s3tables:UpdateTableMetadataLocation",
+        "s3tables:GetTableMetadataLocation",
+        "s3tables:PutTableData",
+        "s3tables:GetTableData"
+      ],
+      "Resource": [
+        "arn:aws:s3tables:us-east-1:YOUR_ACCOUNT_ID:bucket/YOUR_TABLE_BUCKET",
+        "arn:aws:s3tables:us-east-1:YOUR_ACCOUNT_ID:bucket/YOUR_TABLE_BUCKET/*"
+      ]
+    },
+    {
+      "Sid": "S3CodeAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::YOUR_BUCKET/flink-jars/*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:YOUR_ACCOUNT_ID:log-group:/aws/kinesis-analytics/flink-kafka-iceberg-dynamic-s3tables:*"
+      ]
+    }
+  ]
+}

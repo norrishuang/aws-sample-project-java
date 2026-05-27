@@ -1,0 +1,78 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "MSKAccess",
+      "Effect": "Allow",
+      "Action": [
+        "kafka-cluster:Connect",
+        "kafka-cluster:DescribeGroup",
+        "kafka-cluster:AlterGroup",
+        "kafka-cluster:DescribeTopic",
+        "kafka-cluster:ReadData"
+      ],
+      "Resource": [
+        "arn:aws:kafka:us-east-1:YOUR_ACCOUNT_ID:cluster/YOUR_MSK_CLUSTER/*",
+        "arn:aws:kafka:us-east-1:YOUR_ACCOUNT_ID:topic/YOUR_MSK_CLUSTER/*",
+        "arn:aws:kafka:us-east-1:YOUR_ACCOUNT_ID:group/YOUR_MSK_CLUSTER/*"
+      ]
+    },
+    {
+      "Sid": "S3WarehouseAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::YOUR_WAREHOUSE_BUCKET",
+        "arn:aws:s3:::YOUR_WAREHOUSE_BUCKET/*"
+      ]
+    },
+    {
+      "Sid": "S3CodeAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::YOUR_BUCKET/flink-jars/*"
+      ]
+    },
+    {
+      "Sid": "GlueCatalogAccess",
+      "Effect": "Allow",
+      "Action": [
+        "glue:GetDatabase",
+        "glue:CreateDatabase",
+        "glue:GetTable",
+        "glue:CreateTable",
+        "glue:UpdateTable",
+        "glue:GetTables",
+        "glue:DeleteTable"
+      ],
+      "Resource": [
+        "arn:aws:glue:us-east-1:YOUR_ACCOUNT_ID:catalog",
+        "arn:aws:glue:us-east-1:YOUR_ACCOUNT_ID:database/*",
+        "arn:aws:glue:us-east-1:YOUR_ACCOUNT_ID:table/*/*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream"
+      ],
+      "Resource": [
+        "arn:aws:logs:us-east-1:YOUR_ACCOUNT_ID:log-group:/aws/kinesis-analytics/flink-kafka-iceberg-dynamic-glue:*"
+      ]
+    }
+  ]
+}

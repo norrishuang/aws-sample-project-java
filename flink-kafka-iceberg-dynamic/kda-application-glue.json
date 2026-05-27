@@ -1,0 +1,57 @@
+{
+  "ApplicationName": "flink-kafka-iceberg-dynamic-glue",
+  "RuntimeEnvironment": "FLINK-1_20",
+  "ServiceExecutionRole": "arn:aws:iam::YOUR_ACCOUNT_ID:role/KDA-Flink-Role",
+  "ApplicationConfiguration": {
+    "ApplicationCodeConfiguration": {
+      "CodeContent": {
+        "S3ContentLocation": {
+          "BucketARN": "arn:aws:s3:::YOUR_BUCKET",
+          "FileKey": "flink-jars/flink-kafka-iceberg-dynamic-1.0-SNAPSHOT.jar"
+        }
+      },
+      "CodeContentType": "ZIPFILE"
+    },
+    "FlinkApplicationConfiguration": {
+      "CheckpointConfiguration": {
+        "ConfigurationType": "CUSTOM",
+        "CheckpointingEnabled": true,
+        "CheckpointInterval": 60000,
+        "MinPauseBetweenCheckpoints": 30000
+      },
+      "MonitoringConfiguration": {
+        "ConfigurationType": "CUSTOM",
+        "MetricsLevel": "APPLICATION",
+        "LogLevel": "INFO"
+      },
+      "ParallelismConfiguration": {
+        "ConfigurationType": "CUSTOM",
+        "Parallelism": 4,
+        "ParallelismPerKPU": 1,
+        "AutoScalingEnabled": true
+      }
+    },
+    "EnvironmentProperties": {
+      "PropertyGroups": [
+        {
+          "PropertyGroupId": "FlinkApplicationProperties",
+          "PropertyMap": {
+            "kafka.bootstrap.servers": "YOUR_MSK_BOOTSTRAP_SERVERS",
+            "kafka.topic": "game-action-logs",
+            "kafka.group.id": "flink-kafka-iceberg-dynamic",
+            "kafka.startup.mode": "latest-offset",
+            "sink.target": "iceberg",
+            "iceberg.catalog.type": "glue",
+            "iceberg.catalog.name": "glue_catalog",
+            "iceberg.warehouse": "s3://YOUR_WAREHOUSE_BUCKET/warehouse",
+            "iceberg.namespace": "default",
+            "iceberg.table": "game_action_logs",
+            "aws.region": "us-east-1",
+            "sink.parallelism": "4",
+            "checkpoint.interval": "60000"
+          }
+        }
+      ]
+    }
+  }
+}
