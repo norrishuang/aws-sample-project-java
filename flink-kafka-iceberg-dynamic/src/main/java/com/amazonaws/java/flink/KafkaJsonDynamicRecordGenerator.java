@@ -96,10 +96,23 @@ public class KafkaJsonDynamicRecordGenerator implements DynamicRecordGenerator<S
         // Convert to RowData (all INSERT)
         RowData rowData = convertToRowData(rootNode, schema);
 
+        PartitionSpec partitionSpec = buildPartitionSpec(schema);
         DynamicRecord record = new DynamicRecord(
                 tableIdentifier, branch, schema, rowData,
-                PartitionSpec.unpartitioned(), DistributionMode.HASH, writeParallelism);
+                partitionSpec, DistributionMode.HASH, writeParallelism);
         out.collect(record);
+    }
+
+    // ==================== Partition Spec ====================
+
+    private PartitionSpec buildPartitionSpec(Schema schema) {
+        Types.NestedField tmField = schema.findField("tm");
+        if (tmField != null && tmField.type() instanceof Types.TimestampType) {
+            return PartitionSpec.builderFor(schema)
+                    .hour("tm")
+                    .build();
+        }
+        return PartitionSpec.unpartitioned();
     }
 
     // ==================== Table Routing ====================
@@ -280,8 +293,20 @@ public class KafkaJsonDynamicRecordGenerator implements DynamicRecordGenerator<S
                 if (node.isLong() || node.isInt()) {
                     return TimestampData.fromEpochMillis(node.asLong());
                 }
-                return TimestampData.fromEpochMillis(
-                        java.time.Instant.parse(node.asText()).toEpochMilli());
+                String text = node.asText();
+                try {
+                    java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(text,
+                        java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                    return TimestampData.fromLocalDateTime(ldt);
+                } catch (Exception e1) {
+                    try {
+                        java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(text,
+                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                        return TimestampData.fromLocalDateTime(ldt);
+                    } catch (Exception e2) {
+                        return TimestampData.fromEpochMillis(Long.parseLong(text));
+                    }
+                }
             } else if (type instanceof Types.DateType) {
                 return node.asInt();
             } else if (type instanceof Types.DecimalType) {
