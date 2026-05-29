@@ -87,7 +87,7 @@ public class IcebergApplication {
 			String kafkaBootstrapServers = applicationProperties.get("kafka_bootstrap_servers", DEFAULT_KAFKA_BOOTSTRAP_SERVERS);
 
 			Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
-			configuration.setString("execution.checkpointing.interval", "1 min");
+			configuration.setString("execution.checkpointing.interval", "10 min");
 			// 更激进的 TTL 配置 - 缩短状态保留时间
 			configuration.setString("table.exec.state.ttl", "10 min");
 			// 启用状态清理优化

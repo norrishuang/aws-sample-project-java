@@ -91,10 +91,10 @@ public class MSKJsonIcebergSink {
     public static void createAndDeployJob(TableEnvironment tableEnvironment) {
       Configuration configuration = tableEnvironment.getConfig().getConfiguration();
 
-      configuration.setString("execution.checkpointing.interval", "1 min");
+      configuration.setString("execution.checkpointing.interval", "10 min");
       //                        tableEnvironment.setParallelism(_Parallelism);
 
-      configuration.setString("execution.checkpointing.interval", "1 min");
+      configuration.setString("execution.checkpointing.interval", "10 min");
       // 更激进的 TTL 配置 - 缩短状态保留时间
       //                        configuration.setString("table.exec.state.ttl", "3600000");
       TableConfig tableConfig = tableEnvironment.getConfig();

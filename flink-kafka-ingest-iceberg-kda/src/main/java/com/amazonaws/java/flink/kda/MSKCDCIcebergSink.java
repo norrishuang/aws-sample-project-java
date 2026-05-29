@@ -66,7 +66,7 @@ public class MSKCDCIcebergSink {
 
                         Configuration configuration = streamTableEnvironment.getConfig().getConfiguration();
 
-                        configuration.setString("execution.checkpointing.interval", "1 min");
+                        configuration.setString("execution.checkpointing.interval", "10 min");
                         env.setParallelism(_Parallelism);
 
                         final String icebergCatalog = String.format("CREATE CATALOG glue_catalog WITH ( \n" +
