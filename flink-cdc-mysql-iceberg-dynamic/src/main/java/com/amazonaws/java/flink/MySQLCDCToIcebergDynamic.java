@@ -199,6 +199,10 @@ public class MySQLCDCToIcebergDynamic {
         String qualifiedTables = buildQualifiedTableList(mysqlDatabase, mysqlTables);
         LOG.info("MySQL tableList: {}", qualifiedTables);
 
+        int splitSize = params.getInt("mysql.split.size", 2000);
+        int fetchSize = params.getInt("mysql.fetch.size", 1000);
+        LOG.info("MySQL CDC — SplitSize: {}, FetchSize: {}", splitSize, fetchSize);
+
         MySqlSource<String> mySqlSource = MySqlSource.<String>builder()
                 .hostname(mysqlHostname)
                 .port(mysqlPort)
@@ -210,6 +214,8 @@ public class MySQLCDCToIcebergDynamic {
                 .deserializer(new JsonDebeziumDeserializationSchema(true))
                 .includeSchemaChanges(false)
                 .scanNewlyAddedTableEnabled(true)
+                .splitSize(splitSize)
+                .fetchSize(fetchSize)
                 .build();
 
         DataStream<String> cdcStream = env
