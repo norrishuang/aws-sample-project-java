@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,6 +52,8 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
 
     private static final long serialVersionUID = 1L;
     private static final Logger LOG = LoggerFactory.getLogger(CDCDynamicRecordGenerator.class);
+    private static final int DEFAULT_DECIMAL_PRECISION = 38;
+    private static final int DEFAULT_DECIMAL_SCALE = 18;
 
     private final String namespace;
     private final String branch;
@@ -336,9 +339,9 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
      * Map Debezium schema types to Iceberg types.
      * Reference: https://debezium.io/documentation/reference/stable/connectors/mysql.html#mysql-data-types
      */
-    private org.apache.iceberg.types.Type mapDebeziumType(String debeziumType,
-                                                          String logicalName,
-                                                          JsonNode parameters) {
+    org.apache.iceberg.types.Type mapDebeziumType(String debeziumType,
+                                                  String logicalName,
+                                                  JsonNode parameters) {
         // Check logical type first (Debezium semantic types)
         if (logicalName != null) {
             switch (logicalName) {
@@ -358,17 +361,8 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
                 case "org.apache.kafka.connect.data.Time":
                     return Types.TimeType.get();
                 case "org.apache.kafka.connect.data.Decimal":
-                    int precision = 38;
-                    int scale = 18;
-                    if (parameters != null) {
-                        if (parameters.has("scale")) {
-                            scale = parameters.get("scale").asInt(18);
-                        }
-                        if (parameters.has("connect.decimal.precision")) {
-                            precision = parameters.get("connect.decimal.precision").asInt(38);
-                        }
-                    }
-                    return Types.DecimalType.of(precision, scale);
+                case "io.debezium.data.VariableScaleDecimal":
+                    return decimalType(parameters);
                 default:
                     break;
             }
@@ -389,11 +383,29 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
             case "float64":
                 return Types.DoubleType.get();
             case "bytes":
+                // Kafka Connect's Decimal logical type is represented as bytes. Some
+                // serializers omit the logical name but preserve the scale parameter.
+                if (parameters != null && parameters.has("scale")) {
+                    return decimalType(parameters);
+                }
                 return Types.BinaryType.get();
             case "string":
             default:
                 return Types.StringType.get();
         }
+    }
+
+    private org.apache.iceberg.types.Type decimalType(JsonNode parameters) {
+        int precision = decimalParameter(parameters, "connect.decimal.precision",
+                decimalParameter(parameters, "precision", DEFAULT_DECIMAL_PRECISION));
+        int scale = decimalParameter(parameters, "scale", DEFAULT_DECIMAL_SCALE);
+        return Types.DecimalType.of(precision, scale);
+    }
+
+    private int decimalParameter(JsonNode parameters, String name, int defaultValue) {
+        return parameters != null && parameters.has(name)
+                ? parameters.get(name).asInt(defaultValue)
+                : defaultValue;
     }
 
     /**
@@ -542,8 +554,8 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
                 // Debezium Time: milliseconds past midnight (or microseconds for MicroTime)
                 return node.asLong();
             } else if (type instanceof Types.DecimalType) {
-                BigDecimal decimal = new BigDecimal(node.asText());
                 Types.DecimalType decimalType = (Types.DecimalType) type;
+                BigDecimal decimal = decimalValue(node, decimalType.scale());
                 return DecimalData.fromBigDecimal(decimal, decimalType.precision(), decimalType.scale());
             } else if (type instanceof Types.BinaryType) {
                 return node.asText().getBytes();
@@ -554,6 +566,29 @@ public class CDCDynamicRecordGenerator implements DynamicRecordGenerator<String>
             LOG.warn("Error converting value for field type {}: {}, falling back to string",
                     type, e.getMessage());
             return StringData.fromString(node.asText());
+        }
+    }
+
+    static BigDecimal decimalValue(JsonNode node, int scale) {
+        if (node.isNumber()) {
+            return node.decimalValue();
+        }
+
+        JsonNode valueNode = node;
+        int decimalScale = scale;
+        if (node.isObject() && node.has("value")) {
+            valueNode = node.get("value");
+            if (node.has("scale")) {
+                decimalScale = node.get("scale").asInt(scale);
+            }
+        }
+
+        String value = valueNode.asText();
+        try {
+            return new BigDecimal(value);
+        } catch (NumberFormatException ignored) {
+            byte[] unscaledBytes = Base64.getDecoder().decode(value);
+            return new BigDecimal(new BigInteger(unscaledBytes), decimalScale);
         }
     }
 
