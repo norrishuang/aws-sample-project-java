@@ -121,6 +121,13 @@ public class CloudFrontRecord {
         this.scRangeEnd = scRangeEnd;
         this.cPort = cPort;
         this.xEdgeDetailedResultType = xEdgeDetailedResultType;
+        this.cipCountry = cipCountry;
+        this.csAcceptEncoding = csAcceptEncoding;
+        this.csAccept = csAccept;
+        this.cacheBehaviorPathPattern = cacheBehaviorPathPattern;
+        this.csHeaders = csHeaders;
+        this.csHeaderNames = csHeaderNames;
+        this.csHeadersCount = csHeadersCount;
     }
     // Setters
     public void setTimestamp(float timestamp) {
