@@ -12,9 +12,9 @@
     <artifactId>flink-kafka-hbase</artifactId>
 
     <properties>
-        <target.java.version>21</target.java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <target.java.version>11</target.java.version>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Flink 1.20.0 — Amazon Managed Service for Apache Flink -->
         <flink.version>1.20.0</flink.version>
