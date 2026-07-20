@@ -203,6 +203,11 @@ public class MySQLCDCToIcebergDynamic {
         int fetchSize = params.getInt("mysql.fetch.size", 1000);
         LOG.info("MySQL CDC — SplitSize: {}, FetchSize: {}", splitSize, fetchSize);
 
+        // Force MySQL JDBC to use streaming result sets to avoid OOM on large tables.
+        // Integer.MIN_VALUE is the MySQL Connector/J convention for row-by-row streaming.
+        Properties jdbcProps = new Properties();
+        jdbcProps.setProperty("defaultFetchSize", String.valueOf(Integer.MIN_VALUE));
+
         MySqlSource<String> mySqlSource = MySqlSource.<String>builder()
                 .hostname(mysqlHostname)
                 .port(mysqlPort)
@@ -216,6 +221,7 @@ public class MySQLCDCToIcebergDynamic {
                 .scanNewlyAddedTableEnabled(true)
                 .splitSize(splitSize)
                 .fetchSize(fetchSize)
+                .jdbcProperties(jdbcProps)
                 .build();
 
         DataStream<String> cdcStream = env
